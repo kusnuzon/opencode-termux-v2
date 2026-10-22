@@ -81,7 +81,7 @@ def v1_sessions(db):
             (sid,),
         ):
             txt = clean(json.loads(t).get("text") if t else "", TRUNC_ASSIST)
-            if len(txt) > 60 and not txt.startswith("Master, saya periksa"):
+            if len(txt) > 60:
                 result = txt
                 break
         out.append(
@@ -176,7 +176,7 @@ def render(sessions):
             continue
         block = ["## " + label(s)]
         for p in s["prompts"]:
-            block.append("- Master: " + p)
+            block.append("- User: " + p)
         if s["result"]:
             block.append("- Hasil: " + s["result"])
         block.append("")
