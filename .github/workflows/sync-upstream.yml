@@ -1,0 +1,87 @@
+name: Sync upstream opencode v2
+
+# Memantau versi resmi OpenCode V2 (package @opencode/cli) lalu memperbarui
+# file VERSION dan menerbitkan Release mirror di repo ini.
+#
+# Payload TIDAK dilampirkan ke Release (besar ~100 MB dan install.sh mengambil
+# langsung dari registry npm dengan verifikasi sha512), jadi release ini ringan.
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versi target (opsional, mis. 2.1.2). Kosongkan = pakai terbaru.'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        name: Tentukan versi V2 terbaru
+        env:
+          TARGET: ${{ github.event.inputs.version }}
+        run: |
+          ver="$TARGET"
+          if [ -z "$ver" ]; then
+            ver=$(curl -fsSL --max-time 30 https://opencode.ai/update/api/latest/cli/npm \
+              | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)
+          fi
+          if [ -z "$ver" ]; then
+            echo "Gagal menentukan versi OpenCode V2" >&2
+            exit 1
+          fi
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          echo "OpenCode V2: $ver"
+
+      - id: bump
+        name: Perbarui file VERSION
+        env:
+          VER: ${{ steps.meta.outputs.ver }}
+        run: |
+          current=$(cat VERSION)
+          if [ "$current" = "$VER" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Sudah versi $VER, tidak ada perubahan."
+            exit 0
+          fi
+          echo "$VER" > VERSION
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git diff --staged --quiet || git commit -m "chore: opencode v2 $VER"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Terbitkan Release mirror
+        if: steps.bump.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: opencode-termux-v2-${{ steps.meta.outputs.ver }}
+          name: opencode v2 ${{ steps.meta.outputs.ver }} (Termux / Android)
+          body: |
+            Mirror versi OpenCode V2 ${{ steps.meta.outputs.ver }} untuk Termux/Android.
+
+            - Binary resmi: `@opencode/cli-linux-arm64` dari registry npm (diunduh + diverifikasi sha512 oleh `install.sh`)
+            - Launcher: `opencode-v2-launcher` (menjalankan binary lewat loader glibc Termux, background service dijalankan manual karena `process.execPath` V2 = path loader)
+
+            Pasang di Termux:
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash
+            ```
+
+            Perbarui:
+            ```bash
+            opencode-v2 upgrade
+            ```
+          prerelease: false
+
+      - name: Ringkasan
+        run: echo "OpenCode V2 ${{ steps.meta.outputs.ver }} diperiksa."
