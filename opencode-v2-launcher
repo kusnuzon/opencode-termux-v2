@@ -1,0 +1,156 @@
+#!/@PREFIX@/bin/bash
+# opencode-v2-launcher — launcher OpenCode V2 untuk Termux.
+# Dipasang ke $PREFIX/bin/opencode-v2 oleh install.sh (shebang diganti ke
+# path bash Termux karena /usr/bin/env tidak ada di Android).
+#
+# Tugas launcher:
+#   1. Menjalankan binary V2 lewat loader glibc Termux (binary V2 butuh glibc,
+#      sedangkan Android memakai bionic).
+#   2. Memastikan background service hidup. V2 di Termux tidak bisa spawn
+#      service sendiri (process.execPath = path loader, bukan binary asli),
+#      jadi daemon dinyalakan di sini oleh launcher.
+#   3. Memisahkan state/data V2 dari OpenCode V1 (XDG_* khusus).
+set -uo pipefail
+
+PREFIX="@PREFIX@"
+APP="opencode-v2"
+ROOT="$PREFIX/share/$APP"
+REAL="$ROOT/opencode.real"
+LOADER="$PREFIX/glibc/lib/ld-linux-aarch64.so.1"
+GLIBC_LIB="$PREFIX/glibc/lib"
+V2HOME="$HOME/.$APP"
+
+if [ -f "$ROOT/lib/common.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$ROOT/lib/common.sh"
+fi
+
+# Fallback bila common.sh belum terpasang (mis. instalasi setengah jadi).
+if ! command -v sanitize_glibc_env >/dev/null 2>&1; then
+  sanitize_glibc_env() {
+    unset LD_PRELOAD GLIBC_LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
+    export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
+  }
+fi
+
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$V2HOME/data}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-$V2HOME/state}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$V2HOME/cache}"
+export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
+export PATH="$PREFIX/bin:$PATH"
+export TMPDIR="${TMPDIR:-$PREFIX/tmp}"
+
+if [ ! -x "$REAL" ]; then
+  printf '%s\n' "OpenCode V2 belum terpasang di $REAL" >&2
+  printf '%s\n' "Jalankan: curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash" >&2
+  exit 1
+fi
+if [ ! -x "$LOADER" ]; then
+  printf '%s\n' "Runtime glibc Termux tidak ditemukan ($LOADER)" >&2
+  printf '%s\n' "Jalankan: pkg install glibc-repo glibc termux-exec-glibc" >&2
+  exit 1
+fi
+
+# Binary V2 butuh "libc.so", sedangkan glibc Termux hanya menyediakan ld script
+# (file teks) -> loader gagal "invalid ELF header". Shim dibuat di sini.
+if command -v ensure_compat_libs >/dev/null 2>&1; then
+  ensure_compat_libs || printf '%s\n' "Gagal membuat shim pustaka glibc di $COMPAT_LIB" >&2
+fi
+
+run_client() {
+  # Buang LD_PRELOAD bionic dari shell interaktif Termux sebelum menjalankan
+  # binary glibc, jika tidak loader gagal "version `LIBC' not found".
+  sanitize_glibc_env
+  if command -v glibc_lib_path >/dev/null 2>&1; then
+    exec "$LOADER" --library-path "$(glibc_lib_path)" "$REAL" "$@"
+  fi
+  exec "$LOADER" --library-path "$GLIBC_LIB" "$REAL" "$@"
+}
+
+service_status() {
+  local pid url ver
+  pid="$(daemon_pid 2>/dev/null || true)"
+  url="$(daemon_url 2>/dev/null || true)"
+  ver="$(daemon_version 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    printf 'service : running\n'
+    printf 'pid     : %s\n' "$pid"
+    printf 'url     : %s\n' "${url:-?}"
+    printf 'versi   : %s\n' "${ver:-?}"
+  else
+    printf 'service : stopped\n'
+  fi
+}
+
+# --- sub-perintah yang dikelola sendiri -------------------------------------
+case "${1:-}" in
+  service)
+    sub="${2:-status}"
+    case "$sub" in
+      start)
+        daemon_start
+        exit $?
+        ;;
+      stop)
+        daemon_stop
+        printf 'service : stopped\n'
+        exit 0
+        ;;
+      restart)
+        daemon_stop
+        daemon_start
+        exit $?
+        ;;
+      status)
+        service_status
+        exit 0
+        ;;
+      *)
+        # get/set/unset handled oleh V2 langsung (tidak butuh daemon).
+        run_client "$@"
+        exit $?
+        ;;
+    esac
+    ;;
+  doctor)
+    if [ -f "$ROOT/doctor.sh" ]; then
+      exec "$ROOT/doctor.sh" "$@"
+    fi
+    printf '%s\n' "doctor.sh belum terpasang di $ROOT" >&2
+    exit 1
+    ;;
+  upgrade)
+    # V2 punya perintah 'upgrade' bawaan (npm/curl) yang tidak bekerja di
+    # Termux -> pakai script kita sendiri.
+    shift
+    if [ -f "$ROOT/upgrade.sh" ]; then
+      exec "$ROOT/upgrade.sh" "$@"
+    fi
+    printf '%s\n' "upgrade.sh belum terpasang di $ROOT" >&2
+    exit 1
+    ;;
+  uninstall)
+    shift
+    if [ -f "$ROOT/uninstall.sh" ]; then
+      exec "$ROOT/uninstall.sh" "$@"
+    fi
+    printf '%s\n' "uninstall.sh belum terpasang di $ROOT" >&2
+    exit 1
+    ;;
+esac
+
+# --- perintah yang butuh server ---------------------------------------------
+needs_server=1
+case "${1:-}" in
+  --version|-v|--help|-h|completions) needs_server=0 ;;
+esac
+
+if [ "$needs_server" -eq 1 ]; then
+  if ! daemon_ensure; then
+    printf '%s\n' "Gagal menyalakan background service OpenCode V2." >&2
+    printf 'Log: %s\n' "$SERVER_LOG" >&2
+    exit 1
+  fi
+fi
+
+run_client "$@"
