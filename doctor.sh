@@ -112,6 +112,16 @@ if [ -f "$PLUG" ]; then
 else
   check "Plugin memory_save" warn "belum terpasang"
 fi
+TITLE_PLUG="$HOME/.config/opencode/plugins/session-title.js"
+if [ -f "$TITLE_PLUG" ]; then
+  if grep -q 'setup' "$TITLE_PLUG" && grep -q 'server' "$TITLE_PLUG"; then
+    check "Plugin judul sesi" ok "tanpa panggilan model di $TITLE_PLUG"
+  else
+    check "Plugin judul sesi" warn "$TITLE_PLUG — format tidak dikenali"
+  fi
+else
+  check "Plugin judul sesi" warn "belum terpasang (opsional)"
+fi
 SKILL_COUNT=0
 if [ -d "$HOME/.agents/skills" ]; then
   SKILL_COUNT=$(find "$HOME/.agents/skills" -maxdepth 2 -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')

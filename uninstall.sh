@@ -56,5 +56,17 @@ if [ -f "$PLUGIN.v1.bak" ]; then
   ok "Plugin memory_save dipulihkan ke versi V1"
 fi
 
+TITLE="$HOME/.config/opencode/plugins/session-title.js"
+if [ -f "$TITLE" ]; then
+  TITLE_BACKUP="$(ls -1t "$TITLE".bak-* 2>/dev/null | head -n 1 || true)"
+  if [ -n "$TITLE_BACKUP" ]; then
+    mv "$TITLE_BACKUP" "$TITLE"
+    ok "Plugin judul sesi dipulihkan dari cadangan"
+  else
+    rm -f "$TITLE"
+    ok "Plugin judul sesi dihapus"
+  fi
+fi
+
 echo
 ok "OpenCode V2 dihapus. OpenCode V1 (perintah 'opencode') tetap utuh."
