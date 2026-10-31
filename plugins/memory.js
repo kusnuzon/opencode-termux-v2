@@ -151,6 +151,7 @@ export default {
 
   // V2: dipanggil oleh plugin host V2.
   async setup(ctx) {
+    if (typeof ctx?.tool?.transform !== "function") return
     await ctx.tool.transform((editor) => {
       editor.add({
         name: "memory_save",
