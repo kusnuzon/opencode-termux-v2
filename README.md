@@ -59,25 +59,31 @@ cd opencode-termux-v2
    npm, **memverifikasi checksum sha512** dari metadata registry.
 3. Mengekstrak binary ke `$PREFIX/share/opencode-v2/opencode.real`.
 4. Memasang launcher `$PREFIX/bin/opencode-v2`.
-5. Memasang plugin `memory_save` ke `~/.config/opencode/plugins/memory.js`
-   (file yang sama dipakai V1 — dual-compatible).
+5. Memasang plugin bawaan ke `~/.config/opencode/plugins/`:
+   `memory.js` (tool `memory_save`, dual V1+V2) dan `session-title.js`
+   (judul sesi tanpa memanggil model — menghindari error free tier).
 6. Menyalakan background service + smoke test, dengan rollback otomatis bila
    ada langkah yang gagal.
 
-## Memori antar sesi (`--with-memory`)
+## Memori antar sesi (default)
+
+Memori/AGENTS/RECENT dipasang **otomatis** pada instalasi biasa. Untuk
+melewatinya pakai `--no-memory`; untuk melewati plugin pakai `--no-plugin`.
 
 Repository ini **tidak menyimpan** memori pribadi siapa pun. Yang ada hanya
 mekanismenya; isi memori tetap di perangkatmu.
 
 ```bash
 curl -fsSL -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/install.sh | bash -s -- --with-memory
+  https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/install.sh | bash
 ```
 
 Yang dipasang (file yang **sudah ada tidak ditimpa**):
 
 | File | Isi |
 |---|---|
+| `plugins/memory.js` → `~/.config/opencode/plugins/` | tool `memory_save` (V1+V2) |
+| `plugins/session-title.js` → `~/.config/opencode/plugins/` | judul sesi otomatis tanpa model |
 | `memory/MEMORY.md` → `~/.config/opencode/MEMORY.md` | template kosong, diisi lewat tool `memory_save` |
 | `memory/AGENTS.md` → `~/.config/opencode/AGENTS.md` | template aturan kerja |
 | `memory/opencode.jsonc` → `~/.config/opencode/opencode.jsonc` | `instructions`: MEMORY.md + RECENT.md |
@@ -140,6 +146,16 @@ Plugin ini menulis ke `~/.config/opencode/MEMORY.md` (file yang sudah jadi
 memindahkan nilai penting ke memori sebelum context dikompres.
 
 Dokumentasi lengkap: [`docs/MIGRATION-V1.md`](docs/MIGRATION-V1.md).
+
+## Plugin judul sesi
+
+`~/.config/opencode/plugins/session-title.js` membuat judul sesi dari pesan
+pertama user lewat hook V2 `session.hook("title", ...)` — **tanpa memanggil
+model**, jadi tidak kena `FreeTierError` / "Free usage limit reached" yang
+membuat sesi tanpa judul. Di V1 plugin ini aman (hanya menyediakan `server()`).
+
+Kalau ingin judul versi AI lagi (mis. setelah bug upstream diperbaiki), hapus
+atau rename file tersebut. Cek status: `opencode-v2 doctor`.
 
 ## Pemecahan masalah
 

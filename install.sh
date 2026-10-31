@@ -53,7 +53,7 @@ DRY_RUN=0
 NO_PLUGIN=0
 CHECK_ONLY=0
 UPGRADE=0
-WITH_MEMORY=0
+WITH_MEMORY=1
 REF_PIN="${OPENCODE_V2_REF:-$DEFAULT_REF}"
 
 usage() {
@@ -68,8 +68,9 @@ Opsi:
   --upgrade         Setara upgrade.sh (pertahankan konfigurasi)
   --check           Hanya periksa status, tidak mengubah apa pun
   --dry-run         Tampilkan rencana tanpa memasang
-  --no-plugin       Jangan pasang plugin memory_save
-  --with-memory     Pasang juga memori pribadi: MEMORY.md, AGENTS.md,
+  --no-plugin       Jangan pasang plugin bawaan (memory_save + judul sesi)
+  --no-memory       Jangan pasang template memori/AGENTS/RECENT + hook ~/.bashrc
+  --with-memory     (default) Pasang memori pribadi: MEMORY.md, AGENTS.md,
                     RECENT.md (ringkasan sesi otomatis) + hook ~/.bashrc
   --ref <ref>       Ambil skrip pendukung dari branch/tag lain
   -h, --help        Tampilkan bantuan ini
@@ -86,6 +87,7 @@ while [ $# -gt 0 ]; do
     --check) CHECK_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --no-plugin) NO_PLUGIN=1; shift ;;
+    --no-memory) WITH_MEMORY=0; shift ;;
     --with-memory) WITH_MEMORY=1; shift ;;
     --ref) REF_PIN="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -133,7 +135,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   info "  5. Pasang payload ke $ROOT/opencode.real"
   info "  6. Pasang launcher ke $LAUNCHER (perintah: opencode-v2)"
   info "  7. Jalankan background service + smoke test"
-  [ "$NO_PLUGIN" -eq 0 ] && info "  8. Pasang plugin memory_save ke ~/.config/opencode/plugins/memory.js"
+  [ "$NO_PLUGIN" -eq 0 ] && info "  8. Pasang plugin bawaan (memory_save + judul sesi) ke ~/.config/opencode/plugins/"
   [ "$WITH_MEMORY" -eq 1 ] && info "  9. Pasang memori pribadi (MEMORY.md, AGENTS.md, RECENT.md) + hook ~/.bashrc"
   exit 0
 fi
@@ -194,31 +196,37 @@ else
   die "Gagal membuat shim pustaka glibc di $COMPAT_LIB"
 fi
 
-# --- plugin memory ----------------------------------------------------------
+# --- plugin bawaan (memory_save + judul sesi) -------------------------------
 PLUGIN_DIR="$HOME/.config/opencode/plugins"
-PLUGIN_FILE="$PLUGIN_DIR/memory.js"
+install_plugin() {
+  local name="$1"
+  local src="$SCRIPT_DIR/plugins/$name"
+  local dst="$PLUGIN_DIR/$name"
+  if [ ! -f "$src" ]; then
+    mkdir -p "$SCRIPT_DIR/plugins"
+    fetch_remote "plugins/$name" "$src" "$REF_PIN" \
+      || { warn "Gagal mengunduh plugins/$name"; return 1; }
+  fi
+  if [ -f "$dst" ] && ! cmp -s "$src" "$dst"; then
+    local backup
+    if [ "$name" = "memory.js" ]; then
+      backup="$dst.v1.bak"
+      [ -e "$backup" ] && backup="$dst.v1.$(date +%Y%m%d%H%M%S).bak"
+    else
+      backup="$dst.bak-$(date +%Y%m%d%H%M%S)"
+    fi
+    cp "$dst" "$backup"
+    dim "Plugin lama dicadangkan ke $backup"
+  fi
+  cp "$src" "$dst"
+  ok "Plugin terpasang: $dst"
+}
 if [ "$NO_PLUGIN" -eq 1 ]; then
-  dim "Plugin memory_save dilewati (--no-plugin)"
+  dim "Plugin bawaan dilewati (--no-plugin)"
 else
   mkdir -p "$PLUGIN_DIR"
-  PLUGIN_SRC="$SCRIPT_DIR/plugins/memory.js"
-  if [ ! -f "$PLUGIN_SRC" ]; then
-    mkdir -p "$SCRIPT_DIR/plugins"
-    fetch_remote "plugins/memory.js" "$PLUGIN_SRC" "$REF_PIN" \
-      || warn "Gagal mengunduh plugins/memory.js"
-  fi
-  if [ -f "$PLUGIN_SRC" ]; then
-    if [ -f "$PLUGIN_FILE" ] && ! cmp -s "$PLUGIN_SRC" "$PLUGIN_FILE"; then
-      BACKUP_PLUGIN="$PLUGIN_FILE.v1.bak"
-      if [ -e "$BACKUP_PLUGIN" ]; then
-        BACKUP_PLUGIN="$PLUGIN_FILE.v1.$(date +%Y%m%d%H%M%S).bak"
-      fi
-      cp "$PLUGIN_FILE" "$BACKUP_PLUGIN"
-      dim "Plugin lama dicadangkan ke $BACKUP_PLUGIN"
-    fi
-    cp "$PLUGIN_SRC" "$PLUGIN_FILE"
-    ok "Plugin memory_save terpasang: $PLUGIN_FILE"
-  fi
+  install_plugin memory.js || true
+  install_plugin session-title.js || true
 fi
 
 # --- memori pribadi + ringkasan sesi otomatis -------------------------------
@@ -256,6 +264,9 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
         || { warn "Gagal mengambil memory/$f"; continue; }
     fi
     cp "$src" "$OC_DIR/$f"
+    if [ "$f" = "opencode.jsonc" ]; then
+      sed -i "s|/data/data/com.termux/files/home|$HOME|g" "$OC_DIR/$f"
+    fi
   done
   [ -f "$OC_DIR/RECENT.md" ] || printf '# RECENT\n\nBelum ada sesi tercatat.\n' >"$OC_DIR/RECENT.md"
   if [ -x "$DIGEST_FILE" ]; then
@@ -308,4 +319,4 @@ info "Periksa       : opencode-v2 doctor"
 info "Log server    : $SERVER_LOG"
 info ""
 info "OpenCode V1 tetap utuh (perintah 'opencode'). Keduanya memakai plugin"
-info "memory_save yang sama dan database yang terpisah."
+info "memory_save + judul sesi yang sama dan database yang terpisah."
