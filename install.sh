@@ -274,7 +274,8 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
   fi
   ok "Memori/template, aturan, dan instructions siap di $OC_DIR"
 
-  if [ -f "$HOME/.bashrc" ] && ! grep -q "_oc_refresh_digest" "$HOME/.bashrc"; then
+  if ! grep -q "_oc_refresh_digest" "$HOME/.bashrc" 2>/dev/null; then
+    [ -f "$HOME/.bashrc" ] || : >"$HOME/.bashrc"
     cat >>"$HOME/.bashrc" <<'EOS'
 
 # --- segarkan ringkasan sesi sebelum opencode dibuka (install.sh) ---
