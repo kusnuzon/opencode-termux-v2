@@ -29,8 +29,41 @@ fetch_remote() {
     -o "$dest" 2>/dev/null; then
     return 0
   fi
-  curl -fsSL --max-time 60 -o "$dest" "${RAW_BASE}/${ref}/${path}"
+  if curl -fsSL --max-time 60 -o "$dest" "${RAW_BASE}/${ref}/${path}" 2>/dev/null; then
+    return 0
+  fi
+  # cadangan: wget (tanpa header) atau python (dengan header raw)
+  if command -v wget >/dev/null 2>&1; then
+    wget -q --timeout=60 -O "$dest" "${RAW_BASE}/${ref}/${path}" >/dev/null 2>&1 && return 0
+  fi
+  if command -v python >/dev/null 2>&1; then
+    python - "$dest" "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" <<'PY' >/dev/null 2>&1
+import sys, urllib.request
+dest, url = sys.argv[1], sys.argv[2]
+req = urllib.request.Request(url, headers={"User-Agent": "opencode-v2",
+                                           "Accept": "application/vnd.github.raw"})
+open(dest, "wb").write(urllib.request.urlopen(req, timeout=60).read())
+PY
+    [ -s "$dest" ] && return 0
+  fi
+  return 1
 }
+
+# Bootstrap jaringan sebelum mengunduh apa pun. Di Termux, paket glibc bisa
+# merusak curl ("cannot locate symbol SSL_set_quic_tls_early_data_enabled"),
+# sehingga installer berhenti dengan pesan "gagal mengunduh" yang menyesatkan.
+net_bootstrap() {
+  curl -fsS --max-time 10 -o /dev/null https://github.com >/dev/null 2>&1 && return 0
+  echo "! curl tidak sehat — memasang ulang curl/libcurl/openssl" >&2
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall \
+    -o Dpkg::Options::=--force-confold curl libcurl openssl ca-certificates >/dev/null 2>&1 || true
+  command -v pkg >/dev/null 2>&1 &&
+    pkg install -y curl libcurl openssl ca-certificates >/dev/null 2>&1 || true
+  hash -r 2>/dev/null || true
+  curl -fsS --max-time 10 -o /dev/null https://github.com >/dev/null 2>&1
+}
+
+net_bootstrap || true
 
 # Muat common.sh dari clone lokal; kalau dijalankan lewat pipe, unduh dari GitHub.
 if [ -f "$SCRIPT_DIR/lib/common.sh" ]; then
@@ -51,6 +84,8 @@ fi
 VERSION_ARG=""
 DRY_RUN=0
 NO_PLUGIN=0
+NO_EXTRA=0
+export NO_EXTRA
 CHECK_ONLY=0
 UPGRADE=0
 WITH_MEMORY=1
@@ -69,6 +104,7 @@ Opsi:
   --check           Hanya periksa status, tidak mengubah apa pun
   --dry-run         Tampilkan rencana tanpa memasang
   --no-plugin       Jangan pasang plugin bawaan (memory_save + judul sesi)
+  --no-extra        Jangan pasang paket opsional besar (tesseract, chromium)
   --no-memory       Jangan pasang template memori/AGENTS/RECENT + hook ~/.bashrc
   --with-memory     (default) Pasang memori pribadi: MEMORY.md, AGENTS.md,
                     RECENT.md (ringkasan sesi otomatis) + hook ~/.bashrc
@@ -87,6 +123,7 @@ while [ $# -gt 0 ]; do
     --check) CHECK_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --no-plugin) NO_PLUGIN=1; shift ;;
+    --no-extra) NO_EXTRA=1; export NO_EXTRA; shift ;;
     --no-memory) WITH_MEMORY=0; shift ;;
     --with-memory) WITH_MEMORY=1; shift ;;
     --ref) REF_PIN="${2:-}"; shift 2 ;;
@@ -105,13 +142,16 @@ ensure_tools
 CURRENT="$(installed_version)"
 info "PREFIX      : $PREFIX"
 info "Versi terpasang saat ini : ${CURRENT}"
-info "Versi repository         : $(cat "$SCRIPT_DIR/../VERSION" 2>/dev/null || printf 'n/a')"
+REPO_VERSION="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || cat "$SCRIPT_DIR/../VERSION" 2>/dev/null || printf 'n/a')"
+info "Versi repository         : $REPO_VERSION"
 echo
 
 if [ "$CHECK_ONLY" -eq 1 ]; then
-  "$SCRIPT_DIR/doctor.sh" 2>/dev/null || {
-    warn "doctor.sh tidak ditemukan di lokasi ini — lewati pemeriksaan detail"
-  }
+  if [ -f "$SCRIPT_DIR/doctor.sh" ]; then
+    bash "$SCRIPT_DIR/doctor.sh" || warn "doctor menemukan masalah — lihat baris '✖' di atas"
+  else
+    warn "doctor.sh tidak ada di lokasi ini — lewati pemeriksaan detail"
+  fi
   exit 0
 fi
 

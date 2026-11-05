@@ -59,16 +59,78 @@ require_termux() {
   [ "$arch" = "aarch64" ] || die "Hanya arm64 (aarch64) yang didukung. detected arch=$arch"
 }
 
+# --- jaringan & apt (tahan lingkungan Termux baru) ---------------------------
+# Dua masalah nyata: (1) `apt-get install` tanpa update -> "Unable to locate
+# package"; (2) paket glibc menimpa libcurl -> curl mati dengan
+# "cannot locate symbol SSL_set_quic_tls_early_data_enabled" sehingga semua
+# unduhan gagal. Helper ini dipakai installer & upgrade.
+
+apt_update_retry() {
+  local i
+  for i in 1 2 3; do
+    pkg update -y >/dev/null 2>&1 && return 0
+    sleep $((i * 2))
+  done
+  return 1
+}
+
+curl_ok() { curl -fsS --max-time 10 -o /dev/null https://github.com >/dev/null 2>&1; }
+
+heal_curl() {
+  curl_ok && return 0
+  warn "curl tidak sehat — memasang ulang curl/libcurl/openssl"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall \
+    -o Dpkg::Options::=--force-confold curl libcurl openssl ca-certificates >/dev/null 2>&1 || \
+    pkg install -y curl libcurl openssl ca-certificates >/dev/null 2>&1 || true
+  hash -r 2>/dev/null || true
+  curl_ok
+}
+
+# download_url <url> <dest> [accept] — curl → wget → python.
+download_url() {
+  local url="$1" dest="$2" accept="${3:-}" part="$2.part"
+  mkdir -p "$(dirname "$dest")" || return 1
+  rm -f "$part"
+  if [ -n "$accept" ]; then
+    curl -fsSL --max-time 300 -H "Accept: $accept" "$url" -o "$part" 2>/dev/null
+  else
+    curl -fsSL --max-time 300 "$url" -o "$part" 2>/dev/null
+  fi
+  if [ -s "$part" ]; then mv -f "$part" "$dest"; return 0; fi
+  rm -f "$part"
+  if have wget && wget -q --timeout=60 -O "$part" "$url" >/dev/null 2>&1 && [ -s "$part" ]; then
+    mv -f "$part" "$dest"; return 0
+  fi
+  rm -f "$part"
+  if have python; then
+    python - "$url" "$part" "$accept" <<'PY' >/dev/null 2>&1 || true
+import sys, urllib.request
+url, dest, accept = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "")
+req = urllib.request.Request(url, headers={"User-Agent": "opencode-v2"})
+if accept:
+    req.add_header("Accept", accept)
+open(dest, "wb").write(urllib.request.urlopen(req, timeout=60).read())
+PY
+    [ -s "$part" ] && { mv -f "$part" "$dest"; return 0; }
+  fi
+  rm -f "$part"
+  return 1
+}
+
 # --- runtime glibc ----------------------------------------------------------
 ensure_glibc() {
   if [ -x "$LOADER" ] && [ -f "$GLIBC_LIB/libc.so.6" ]; then
+    heal_curl >/dev/null 2>&1 || true
     return 0
   fi
   step "Memasang runtime glibc (dibutuhkan untuk menjalankan binary Linux di Android)"
   have pkg || die "pkg tidak ditemukan — paket Termux tidak lengkap"
   pkg install -y glibc-repo >/dev/null 2>&1 || true
+  apt_update_retry || true
   pkg install -y glibc termux-exec-glibc >/dev/null 2>&1 || true
   [ -x "$LOADER" ] || die "Runtime glibc gagal dipasang. Jalankan manual: pkg install glibc-repo glibc termux-exec-glibc"
+  # glibc bisa menimpa libcurl: pulihkan curl sebelum unduhan berikutnya.
+  heal_curl >/dev/null 2>&1 || warn "curl masih bermasalah setelah glibc (unduhan memakai wget/python)"
   ok "Runtime glibc siap"
 }
 
@@ -122,16 +184,34 @@ sanitize_glibc_env() {
   export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
 }
 
+BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh nodejs yq shellcheck ncdu htop"
+# Opsional/besar: butuh x11-repo; gagal = peringatan saja.
+EXTRA_PKGS="tesseract chromium"
+
+pkg_installed() {
+  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'
+}
+
 ensure_tools() {
-  local missing=()
-  local tool
-  for tool in curl tar sha512sum base64 od; do
-    have "$tool" || missing+=("$tool")
+  local missing=() p
+  for p in $BASE_PKGS; do
+    pkg_installed "$p" || missing+=("$p")
   done
   if [ ${#missing[@]} -gt 0 ]; then
     step "Memasang dependensi: ${missing[*]}"
     have pkg || die "pkg tidak ditemukan"
-    pkg install -y "${missing[@]}" >/dev/null 2>&1 || die "Gagal memasang dependensi: ${missing[*]}"
+    apt_update_retry || true
+    # shellcheck disable=SC2086
+    pkg install -y "${missing[@]}" >/dev/null 2>&1 ||
+      die "Gagal memasang dependensi: ${missing[*]}"
+  fi
+  heal_curl >/dev/null 2>&1 || warn "curl masih bermasalah; unduhan memakai wget/python"
+
+  if [ "${NO_EXTRA:-0}" -eq 0 ]; then
+    pkg install -y x11-repo >/dev/null 2>&1 || true
+    # shellcheck disable=SC2086
+    pkg install -y $EXTRA_PKGS >/dev/null 2>&1 ||
+      warn "paket opsional dilewati: $EXTRA_PKGS (pasang manual: pkg install $EXTRA_PKGS)"
   fi
 }
 
@@ -183,11 +263,11 @@ download_payload() {
   url="https://registry.npmjs.org/${pkg}/-/${tarball}"
 
   step "Mengunduh OpenCode V2 ${version} (~100 MB)"
-  curl -fL --retry 3 --max-time 900 -o "$tmp/$tarball" "$url" \
+  download_url "$url" "$tmp/$tarball" \
     || { rm -rf "$tmp"; die "Gagal mengunduh $url"; }
 
-  integrity=$(curl -fsSL --max-time 60 "https://registry.npmjs.org/${pkg}/${version}" \
-    | sed -n 's/.*"integrity":"sha512-\([^"]*\)".*/\1/p' | head -1)
+  integrity=$(download_url "https://registry.npmjs.org/${pkg}/${version}" "$tmp/meta.json" &&
+    sed -n 's/.*"integrity":"sha512-\([^"]*\)".*/\1/p' "$tmp/meta.json" | head -1)
   if [ -n "$integrity" ]; then
     expected="$(base64_to_hex "$integrity")"
     actual="$(sha512_of_file "$tmp/$tarball")"

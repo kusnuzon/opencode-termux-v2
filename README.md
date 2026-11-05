@@ -54,15 +54,21 @@ cd opencode-termux-v2
 
 ## Yang dikerjakan installer
 
-1. Memastikan runtime glibc Termux (`glibc-repo`, `glibc`, `termux-exec-glibc`).
-2. Mengunduh payload resmi `@opencode/cli-linux-arm64` (~100 MB) dari registry
+1. Memasang dependensi dasar lebih dulu: `curl tar unzip gzip coreutils
+   ca-certificates jq python git sqlite wget openssh gh nodejs yq shellcheck
+   ncdu htop`, lalu opsional `tesseract chromium` (+ `x11-repo`; lewati dengan
+   `--no-extra`). Kalau paket glibc merusak `curl`
+   (`cannot locate symbol SSL_set_quic_…`), `curl`/`libcurl`/`openssl`
+   dipasang ulang otomatis, dan unduhan punya cadangan `wget`/`python`.
+2. Memastikan runtime glibc Termux (`glibc-repo`, `glibc`, `termux-exec-glibc`).
+3. Mengunduh payload resmi `@opencode/cli-linux-arm64` (~100 MB) dari registry
    npm, **memverifikasi checksum sha512** dari metadata registry.
-3. Mengekstrak binary ke `$PREFIX/share/opencode-v2/opencode.real`.
-4. Memasang launcher `$PREFIX/bin/opencode-v2`.
-5. Memasang plugin bawaan ke `~/.config/opencode/plugins/`:
+4. Mengekstrak binary ke `$PREFIX/share/opencode-v2/opencode.real`.
+5. Memasang launcher `$PREFIX/bin/opencode-v2`.
+6. Memasang plugin bawaan ke `~/.config/opencode/plugins/`:
    `memory.js` (tool `memory_save`, dual V1+V2) dan `session-title.js`
    (judul sesi tanpa memanggil model — menghindari error free tier).
-6. Menyalakan background service + smoke test, dengan rollback otomatis bila
+7. Menyalakan background service + smoke test, dengan rollback otomatis bila
    ada langkah yang gagal.
 
 ## Memori antar sesi (default)
