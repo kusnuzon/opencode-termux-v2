@@ -1,148 +1,149 @@
-# Migrasi dari OpenCode V1 ke V2 (di Termux)
+# Migrating from OpenCode V1 to V2 (on Termux)
 
-Dokumen ini menjelaskan apa yang berubah, apa yang tetap sama, dan bagaimana
-menjalankan V1 dan V2 berdampingan dengan aman.
+This document explains what changes, what stays the same, and how to run V1 and
+V2 side by side safely.
 
-## Ringkasan
+## Overview
 
-| Aspek | V1 (`opencode`) | V2 (`opencode-v2`) |
+| Aspect | V1 (`opencode`) | V2 (`opencode-v2`) |
 |---|---|---|
-| Versi | 1.19.x | 2.x |
-| Format binary | glibc ELF (Bun) | glibc ELF (Bun) |
-| Paket npm | `opencode-ai` | `@opencode/cli` + `@opencode/cli-linux-arm64` |
+| Version | 1.19.x | 2.x |
+| Binary format | glibc ELF (Bun) | glibc ELF (Bun) |
+| npm package | `opencode-ai` | `@opencode/cli` + `@opencode/cli-linux-arm64` |
 | Plugin API | `server()` | `setup()` |
 | Tool result | `string` | `{ content: string }` |
-| Hook compaction | `experimental.session.compacting` | `session.hook("compaction", ...)` |
-| Skema DB | `session`, `part`, `message` | `session_v2`, `instruction_*`, `kv` |
+| Compaction hook | `experimental.session.compacting` | `session.hook("compaction", ...)` |
+| DB schema | `session`, `part`, `message` | `session_v2`, `instruction_*`, `kv` |
 
-Kedua versi **tidak boleh berbagi database**. Repo ini otomatis mengarahkan V2
-ke `~/.opencode-v2/` sehingga DB V1 (`~/.local/share/opencode/opencode.db`)
-tidak pernah disentuh.
+The two versions **must not share a database**. This repo automatically points V2
+at `~/.opencode-v2/`, so the V1 DB (`~/.local/share/opencode/opencode.db`) is
+never touched.
 
-## Yang tetap dipakai bersama
+## What is still shared
 
-- `~/.config/opencode/opencode.jsonc` — konfigurasi global (model, provider,
-  izin, `instructions`).
-- `~/.config/opencode/MEMORY.md` — memori lintas sesi.
-- `~/.config/opencode/plugins/` — plugin.
-- `~/.agents/skills/` — skill.
-- `~/.local/share/opencode/auth.json` — kredensial provider (dipakai V2 juga,
-  karena direktori config & auth masih milik global OpenCode).
+- `~/.config/opencode/opencode.jsonc` — global configuration (model, provider,
+  permissions, `instructions`).
+- `~/.config/opencode/MEMORY.md` — cross-session memory.
+- `~/.config/opencode/plugins/` — plugins.
+- `~/.agents/skills/` — skills.
+- `~/.local/share/opencode/auth.json` — provider credentials (V2 uses this too,
+  because the config and auth directories still belong to global OpenCode).
 
-## Plugin `memory.js` yang sekarang dual-compatible
+## The `memory.js` plugin is now dual-compatible
 
-Dulu plugin ini hanya jalan di V1:
+This plugin used to run only on V1:
 
 ```js
 import { tool } from "@opencode-ai/plugin"
 export const MemoryPlugin = async () => ({ tool: { memory_save: tool({...}) } })
 ```
 
-Sekarang satu file dipakai V1 **dan** V2:
+Now a single file is used by V1 **and** V2:
 
 ```js
 export default {
   id: "memory",
-  async setup(ctx) {           // dipanggil V2
+  async setup(ctx) {           // called by V2
     await ctx.tool.transform((editor) => {
       editor.add({ name: "memory_save", description, input, async execute(input) {
-        return { content: simpan(input) }   // V2: content, bukan output
+        return { content: saveEntry(input) }   // V2: content, not output
       }})
     })
     await ctx.session.hook("compaction", async (event) => {
-      event.system.push({ type: "text", text: PETUNJUK_COMPACT })
+      event.system.push({ type: "text", text: COMPACT_PROMPT })
     })
   },
-  async server() {             // dipanggil V1
+  async server() {             // called by V1
     const { tool } = await import("@opencode-ai/plugin")
     return { tool: { memory_save: tool({...}) }, "experimental.session.compacting": ... }
   },
 }
 ```
 
-Kenapa bisa berdua:
+Why both work:
 
-- V1 (>= 1.18.29) membaca **default export**; kalau objeknya punya `server()`,
-  V1 memanggil `server()` dan mengabaikan export lain.
-- V2 membaca **default export**; yang dipakai field `id` + `setup()`. Field
-  `server()` diabaikan oleh V2.
-- Helper `tool` milik V1 hanya diimpor secara **dinamis** di dalam `server()`,
-  sehingga tidak pernah dipecah saat V2 memuat modul.
+- V1 (>= 1.18.29) reads the **default export**; if the object has `server()`,
+  V1 calls `server()` and ignores the other exports.
+- V2 reads the **default export**; it uses the `id` + `setup()` fields. The
+  `server()` field is ignored by V2.
+- The V1-only `tool` helper is imported **dynamically** inside `server()`, so it
+  is never resolved when V2 loads the module.
 
-Kalau plugin lama (V1-only) dibiarkan di folder plugin, V2 akan memuatnya juga
-dan gagal: V2 mencari `setup()`, tidak menemukan → plugin diabaikan/error.
-Karena itu file tunggal dual-compatible adalah pilihan paling aman.
+If an old (V1-only) plugin is left in the plugins folder, V2 will load it too
+and fail: V2 looks for `setup()`, does not find it → the plugin is skipped/errors.
+That is why a single dual-compatible file is the safest choice.
 
-### Perbedaan penting hasil tool di V2
+### Important difference in V2 tool results
 
-V2 memvalidasi hasil tool:
+V2 validates tool results:
 
-- Tool **tanpa** skema `output` → hasil **harus** pakai `content`
-  (string atau array `{ type: "text", text }`).
-- Mengembalikan `output` tanpa skema output → error
-  `Tool result declared output without an output schema` (proses *crash*, bukan
-  error biasa).
+- A tool **without** an `output` schema → the result **must** use `content`
+  (a string, or an array of `{ type: "text", text }`).
+- Returning `output` without an output schema → the error
+  `Tool result declared output without an output schema` (the process *crashes*,
+  it is not a normal error).
 
-Jadi `execute` di V2 mengembalikan:
+So `execute` on V2 returns:
 
 ```js
-return { content: "Tersimpan di MEMORY.md (...)" }
+return { content: "Saved to MEMORY.md (...)" }
 ```
 
-## Perbedaan konfigurasi V2
+## V2 configuration differences
 
 - `tui.json` → `cli.json`.
-- `experimental.todo` mati secara default di V2 → aktifkan bila dipakai:
+- `experimental.todo` is off by default in V2 → enable it if you use it:
 
   ```jsonc
   { "experimental": { "todo": true } }
   ```
 
-- LSP **tidak didukung** di V2 (fitur V1).
-- `external_directory` default-nya *allowed* di V2 (lebih longgar dari V1).
+- LSP is **not supported** in V2 (a V1 feature).
+- `external_directory` defaults to *allowed* in V2 (looser than V1).
 
-## Persiapan sebelum memasang V2
+## Preparation before installing V2
 
-1. Pastikan disk lega: binary V2 ±209 MB + tarball sementara ±100 MB
-   → siapkan **≥ 400 MB** bebas.
-2. Pastikan runtime glibc siap (installer juga melakukan ini otomatis):
+1. Make sure there is enough disk: the V2 binary is ~209 MB plus a temporary
+   tarball of ~100 MB → set aside **>= 400 MB** free.
+2. Make sure the glibc runtime is ready (the installer also does this
+   automatically):
 
    ```bash
    pkg install glibc-repo glibc termux-exec-glibc
    ```
 
-3. Catat versi V1 yang dipakai:
+3. Note down the V1 version in use:
 
    ```bash
    opencode --version
    ```
 
-## Urutan yang aman
+## Safe order of operations
 
 ```bash
-# 1. pasang V2 (V1 tidak disentuh)
+# 1. install V2 (V1 is not touched)
 curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash
 
-# 2. cek
+# 2. check
 opencode-v2 doctor
 opencode-v2 --version
 
-# 3. pakai
+# 3. use it
 opencode-v2
 ```
 
 ## Rollback
 
-Kalau V2 bermasalah, V1 tetap bisa dipakai karena database, state, dan
-perintahnya terpisah:
+If V2 misbehaves, V1 still works because the database, state, and commands are
+separate:
 
 ```bash
-opencode          # V1 normal
+opencode          # V1 as usual
 ```
 
-Menghapus V2 sepenuhnya:
+Removing V2 entirely:
 
 ```bash
-opencode-v2 uninstall            # atau: uninstall.sh
-opencode-v2 uninstall --purge    # sekalian data/sesi/log
+opencode-v2 uninstall            # or: uninstall.sh
+opencode-v2 uninstall --purge    # also data/sessions/logs
 ```

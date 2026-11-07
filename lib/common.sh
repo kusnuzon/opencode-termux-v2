@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# common.sh — fungsi bersama untuk installer/upgrade/uninstall/doctor OpenCode V2 di Termux.
-# sourced, bukan dieksekusi.
+# common.sh — shared functions for the OpenCode V2 installer/upgrade/uninstall/doctor on Termux.
+# sourced, not executed.
 
 APP="opencode-v2"
 REPO_SLUG="kusnuzon/opencode-termux-v2"
-# shellcheck disable=SC2034  # dipakai oleh install.sh
+# shellcheck disable=SC2034  # used by install.sh
 DEFAULT_REF="main"
-# shellcheck disable=SC2034  # dipakai oleh install.sh
+# shellcheck disable=SC2034  # used by install.sh
 RAW_BASE="https://raw.githubusercontent.com/${REPO_SLUG}"
 
-# --- path -------------------------------------------------------------------
+# --- paths -------------------------------------------------------------------
 : "${PREFIX:=/data/data/com.termux/files/usr}"
 ROOT="$PREFIX/share/$APP"
 REAL="$ROOT/opencode.real"
 VERSION_FILE="$ROOT/VERSION"
-# shellcheck disable=SC2034  # dipakai oleh doctor.sh/upgrade.sh/uninstall.sh
+# shellcheck disable=SC2034  # used by doctor.sh/upgrade.sh/uninstall.sh
 LAUNCHER="$PREFIX/bin/$APP"
 V2HOME="$HOME/.$APP"
 XDG_DATA_DIR="$V2HOME/data"
@@ -53,17 +53,17 @@ is_termux() {
 }
 
 require_termux() {
-  is_termux || die "Script ini hanya untuk Termux di Android. detected PREFIX=$PREFIX"
+  is_termux || die "This script is for Termux on Android only. detected PREFIX=$PREFIX"
   local arch
   arch="$(uname -m)"
-  [ "$arch" = "aarch64" ] || die "Hanya arm64 (aarch64) yang didukung. detected arch=$arch"
+  [ "$arch" = "aarch64" ] || die "Only arm64 (aarch64) is supported. detected arch=$arch"
 }
 
-# --- jaringan & apt (tahan lingkungan Termux baru) ---------------------------
-# Dua masalah nyata: (1) `apt-get install` tanpa update -> "Unable to locate
-# package"; (2) paket glibc menimpa libcurl -> curl mati dengan
-# "cannot locate symbol SSL_set_quic_tls_early_data_enabled" sehingga semua
-# unduhan gagal. Helper ini dipakai installer & upgrade.
+# --- network & apt (robust on a fresh Termux) --------------------------------
+# Two real problems: (1) `apt-get install` without update -> "Unable to locate
+# package"; (2) the glibc packages overwrite libcurl -> curl dies with
+# "cannot locate symbol SSL_set_quic_tls_early_data_enabled", so every download
+# fails. The installer and upgrade both use these helpers.
 
 apt_update_retry() {
   local i
@@ -78,7 +78,7 @@ curl_ok() { curl -fsS --max-time 10 -o /dev/null https://github.com >/dev/null 2
 
 heal_curl() {
   curl_ok && return 0
-  warn "curl tidak sehat — memasang ulang curl/libcurl/openssl"
+  warn "curl is unhealthy — reinstalling curl/libcurl/openssl"
   DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall \
     -o Dpkg::Options::=--force-confold curl libcurl openssl ca-certificates >/dev/null 2>&1 || \
     pkg install -y curl libcurl openssl ca-certificates >/dev/null 2>&1 || true
@@ -117,31 +117,31 @@ PY
   return 1
 }
 
-# --- runtime glibc ----------------------------------------------------------
+# --- glibc runtime ----------------------------------------------------------
 ensure_glibc() {
   if [ -x "$LOADER" ] && [ -f "$GLIBC_LIB/libc.so.6" ]; then
     heal_curl >/dev/null 2>&1 || true
     return 0
   fi
-  step "Memasang runtime glibc (dibutuhkan untuk menjalankan binary Linux di Android)"
-  have pkg || die "pkg tidak ditemukan — paket Termux tidak lengkap"
+  step "Installing the glibc runtime (required to run Linux binaries on Android)"
+  have pkg || die "pkg not found — the Termux packages are incomplete"
   pkg install -y glibc-repo >/dev/null 2>&1 || true
   apt_update_retry || true
   pkg install -y glibc termux-exec-glibc >/dev/null 2>&1 || true
-  [ -x "$LOADER" ] || die "Runtime glibc gagal dipasang. Jalankan manual: pkg install glibc-repo glibc termux-exec-glibc"
-  # glibc bisa menimpa libcurl: pulihkan curl sebelum unduhan berikutnya.
-  heal_curl >/dev/null 2>&1 || warn "curl masih bermasalah setelah glibc (unduhan memakai wget/python)"
-  ok "Runtime glibc siap"
+  [ -x "$LOADER" ] || die "Failed to install the glibc runtime. Run manually: pkg install glibc-repo glibc termux-exec-glibc"
+  # glibc can overwrite libcurl: repair curl before the next download.
+  heal_curl >/dev/null 2>&1 || warn "curl is still broken after glibc (downloads will use wget/python)"
+  ok "glibc runtime ready"
 }
 
-# --- shim pustaka untuk loader glibc -----------------------------------------
-# Binary V2 (Bun) punya entri DT_NEEDED "libc.so" (bukan libc.so.6). Di paket
-# glibc Termux, libc.so adalah GNU ld script (file teks), sehingga loader
-# glibc gagal membuka: "libc.so: invalid ELF header".
-# Solusi: direktori shim berisi symlink libc.so -> libc.so.6 (dan libm.so ->
-# libm.so.6), lalu direktori shim diletakkan DI AWAL --library-path.
-# Pustaka glibc milik Termux sendiri tidak diubah, jadi ld script tetap utuh
-# untuk toolchain linker.
+# --- library shim for the glibc loader --------------------------------------
+# The V2 binary (Bun) has a DT_NEEDED entry "libc.so" (not libc.so.6). In the
+# Termux glibc package libc.so is a GNU ld script (a text file), so the glibc
+# loader fails to open it: "libc.so: invalid ELF header".
+# Fix: a shim directory holding the symlinks libc.so -> libc.so.6 (and libm.so ->
+# libm.so.6), with the shim directory placed FIRST in --library-path.
+# Termux's own glibc libraries are left untouched, so the ld script stays intact
+# for the linker toolchain.
 ensure_compat_libs() {
   mkdir -p "$COMPAT_LIB" 2>/dev/null || return 1
   local n target
@@ -153,29 +153,30 @@ ensure_compat_libs() {
   [ -e "$COMPAT_LIB/libc.so" ]
 }
 
-# Library path untuk loader glibc: shim dulu, baru glibc Termux.
+# Library path for the glibc loader: shim first, then Termux glibc.
 glibc_lib_path() {
   printf '%s:%s' "$COMPAT_LIB" "$GLIBC_LIB"
 }
 
-# --- sanitasi environment untuk loader glibc ---------------------------------
-# Shell interaktif Termux menyetel LD_PRELOAD ke pustaka bionic
-# (libtermux-exec-ld-preload.so). Loader glibc juga menghormati LD_PRELOAD,
-# lalu mencoba memuat pustaka bionic itu ke dalam proses glibc dan gagal:
+# --- environment sanitising for the glibc loader ----------------------------
+# The Termux interactive shell sets LD_PRELOAD to a bionic library
+# (libtermux-exec-ld-preload.so). The glibc loader honours LD_PRELOAD too, then
+# tries to load that bionic library into the glibc process and fails:
 #   "version `LIBC' not found (required by .../libtermux-exec-ld-preload.so)"
-# Simbol versi "LIBC" hanya ada di libc.so bionic, sedangkan glibc memakai
+# The version symbol "LIBC" only exists in bionic libc, while glibc uses
 # GLIBC_2.x.
 #
-# Pola yang sama dipakai helper native OpenCode V1 (unset LD_PRELOAD sebelum
-# exec loader) dan glibc-runner resmi Termux ("unset LD_PRELOAD" di baris
-# pertama). Setelah dibuang, anak proses bionic tetap jalan normal: ia mewarisi
-# LD_PRELOAD dari lingkup glibc, dan termux-exec milik bionic tidak dibutuhkan
-# karena Termux sudah menyediakan /system/bin/sh serta linker64.
+# The same pattern is used by the native OpenCode V1 helper (unset LD_PRELOAD
+# before exec'ing the loader) and by the official Termux glibc-runner ("unset
+# LD_PRELOAD" on its first line). Once dropped, bionic child processes still run
+# normally: they inherit LD_PRELOAD from the glibc scope, and the bionic
+# termux-exec is not needed because Termux already provides /system/bin/sh and
+# linker64.
 #
-# Catatan: varian glibc dari libtermux-exec.so TIDAK boleh dipakai di sini.
-# Pustaka itu meng-interpose execve, tetapi anak bionic tetap menerima
-# LD_PRELOAD yang menunjuk ke pustaka glibc -> "CANNOT LINK EXECUTABLE ...
-# library libc.so.6 not found".
+# Note: the glibc variant of libtermux-exec.so must NOT be used here. That
+# library interposes execve, but bionic children still receive an LD_PRELOAD
+# pointing at a glibc library -> "CANNOT LINK EXECUTABLE ... library libc.so.6
+# not found".
 sanitize_glibc_env() {
   unset LD_PRELOAD
   unset GLIBC_LD_PRELOAD
@@ -185,7 +186,7 @@ sanitize_glibc_env() {
 }
 
 BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh nodejs yq shellcheck ncdu htop"
-# Opsional/besar: butuh x11-repo; gagal = peringatan saja.
+# Optional/large: needs x11-repo; failure is only a warning.
 EXTRA_PKGS="tesseract chromium"
 
 pkg_installed() {
@@ -198,25 +199,25 @@ ensure_tools() {
     pkg_installed "$p" || missing+=("$p")
   done
   if [ ${#missing[@]} -gt 0 ]; then
-    step "Memasang dependensi: ${missing[*]}"
-    have pkg || die "pkg tidak ditemukan"
+    step "Installing dependencies: ${missing[*]}"
+    have pkg || die "pkg not found"
     apt_update_retry || true
     # shellcheck disable=SC2086
     pkg install -y "${missing[@]}" >/dev/null 2>&1 ||
-      die "Gagal memasang dependensi: ${missing[*]}"
+      die "Failed to install dependencies: ${missing[*]}"
   fi
-  heal_curl >/dev/null 2>&1 || warn "curl masih bermasalah; unduhan memakai wget/python"
+  heal_curl >/dev/null 2>&1 || warn "curl is still broken; downloads will use wget/python"
 
   if [ "${NO_EXTRA:-0}" -eq 0 ]; then
     pkg install -y x11-repo >/dev/null 2>&1 || true
     # shellcheck disable=SC2086
     pkg install -y $EXTRA_PKGS >/dev/null 2>&1 ||
-      warn "paket opsional dilewati: $EXTRA_PKGS (pasang manual: pkg install $EXTRA_PKGS)"
+      warn "optional packages skipped: $EXTRA_PKGS (install manually: pkg install $EXTRA_PKGS)"
   fi
 }
 
-# --- versi ------------------------------------------------------------------
-# Metadata resmi: {"version":"2.1.2","package":"@opencode/cli", ...}
+# --- version ----------------------------------------------------------------
+# Official metadata: {"version":"2.1.2","package":"@opencode/cli", ...}
 latest_metadata() {
   curl -fsSL --max-time 30 https://opencode.ai/update/api/latest/cli/npm
 }
@@ -229,10 +230,10 @@ installed_version() {
   [ -f "$VERSION_FILE" ] && head -1 "$VERSION_FILE" || printf 'unknown'
 }
 
-# --- unduh & verifikasi payload --------------------------------------------
-# Tarball diambil langsung dari registry npm (bukan lewat npm install, karena
-# Node di Termux melaporkan process.platform=android sehingga tidak ada paket
-# android/arm64). Checksum sha512 diambil dari metadata registry.
+# --- download & verify the payload -----------------------------------------
+# The tarball comes straight from the npm registry (not through npm install,
+# because Node on Termux reports process.platform=android, so no android/arm64
+# package exists). The sha512 checksum comes from the registry metadata.
 package_name_for() {
   local version="$1" scope="@opencode"
   local code
@@ -253,7 +254,7 @@ base64_to_hex() {
 }
 
 # download_payload <version> <dest-binary>
-# Mengunduh tarball resmi, memverifikasi sha512, lalu mengekstrak binary.
+# Downloads the official tarball, verifies the sha512, then extracts the binary.
 download_payload() {
   local version="$1" dest="$2"
   local tmp pkg tarball url integrity expected actual
@@ -262,9 +263,9 @@ download_payload() {
   tarball="cli-linux-arm64-${version}.tgz"
   url="https://registry.npmjs.org/${pkg}/-/${tarball}"
 
-  step "Mengunduh OpenCode V2 ${version} (~100 MB)"
+  step "Downloading OpenCode V2 ${version} (~100 MB)"
   download_url "$url" "$tmp/$tarball" \
-    || { rm -rf "$tmp"; die "Gagal mengunduh $url"; }
+    || { rm -rf "$tmp"; die "Failed to download $url"; }
 
   integrity=$(download_url "https://registry.npmjs.org/${pkg}/${version}" "$tmp/meta.json" &&
     sed -n 's/.*"integrity":"sha512-\([^"]*\)".*/\1/p' "$tmp/meta.json" | head -1)
@@ -273,15 +274,15 @@ download_payload() {
     actual="$(sha512_of_file "$tmp/$tarball")"
     if [ "$expected" != "$actual" ]; then
       rm -rf "$tmp"
-      die "Checksum sha512 tidak cocok — file mungkin rusak. Ditolak."
+      die "sha512 checksum mismatch — the file may be corrupt. Rejected."
     fi
-    ok "Checksum sha512 terverifikasi"
+    ok "sha512 checksum verified"
   else
-    warn "Metadata integritas tidak ditemukan, lewati verifikasi checksum"
+    warn "Integrity metadata not found, skipping checksum verification"
   fi
 
-  tar -xzf "$tmp/$tarball" -C "$tmp" || { rm -rf "$tmp"; die "Gagal mengekstrak $tarball"; }
-  [ -f "$tmp/package/bin/opencode" ] || { rm -rf "$tmp"; die "Binary tidak ditemukan di dalam $tarball"; }
+  tar -xzf "$tmp/$tarball" -C "$tmp" || { rm -rf "$tmp"; die "Failed to extract $tarball"; }
+  [ -f "$tmp/package/bin/opencode" ] || { rm -rf "$tmp"; die "Binary not found inside $tarball"; }
   mkdir -p "$(dirname "$dest")"
   cp "$tmp/package/bin/opencode" "$dest"
   chmod 755 "$dest"
@@ -289,12 +290,12 @@ download_payload() {
 }
 
 # --- daemon / background service --------------------------------------------
-# V2 selalu menjalankan background service dengan cara spawn process.execPath.
-# Di Termux process.execPath = path loader glibc, sehingga spawn anak selalu
-# gagal ("serve: error while loading shared libraries"). Solusinya: daemon
-# server dijalankan manual oleh launcher (lewat loader), lalu mendaftarkan
-# dirinya di state/service.json. Klien kemudian menemukan daemon itu dan tidak
-# pernah melakukan spawn -> tidak ada child process yang gagal.
+# V2 always starts its background service by spawning process.execPath. On
+# Termux process.execPath = the glibc loader path, so the spawn always fails
+# ("serve: error while loading shared libraries"). The fix: the launcher starts
+# the server daemon itself (through the loader), and the daemon registers itself
+# in state/service.json. The client then finds that daemon and never spawns ->
+# no child process fails.
 daemon_registration() {
   [ -f "$REGISTRATION" ] && cat "$REGISTRATION" 2>/dev/null || printf ''
 }
@@ -342,13 +343,13 @@ daemon_stop() {
   rm -f "$REGISTRATION"
 }
 
-# daemon_start — menjalankan `opencode serve --service` secara terdetach.
+# daemon_start — starts `opencode serve --service` detached.
 daemon_start() {
   ensure_glibc
-  ensure_compat_libs || die "Gagal membuat shim pustaka glibc di $COMPAT_LIB"
+  ensure_compat_libs || die "Failed to create the glibc library shim in $COMPAT_LIB"
   mkdir -p "$XDG_DATA_DIR" "$XDG_STATE_DIR" "$XDG_CACHE_DIR" "$LOG_DIR"
   daemon_stop
-  step "Menyalakan background service OpenCode V2"
+  step "Starting the OpenCode V2 background service"
   (
     sanitize_glibc_env
     export HOME="$HOME"
@@ -364,32 +365,32 @@ daemon_start() {
   local _
   for _ in $(seq 1 60); do
     if daemon_alive && [ -n "$(daemon_url)" ]; then
-      ok "Background service hidup di $(daemon_url)"
+      ok "Background service is up at $(daemon_url)"
       return 0
     fi
     sleep 0.5
   done
-  err "Background service gagal start. 10 baris terakhir log:"
+  err "Background service failed to start. Last 10 log lines:"
   tail -10 "$SERVER_LOG" >&2 2>/dev/null || true
   return 1
 }
 
-# daemon_ensure — pastikan ada daemon hidup dengan versi yang cocok.
+# daemon_ensure — make sure a live daemon with a matching version exists.
 daemon_ensure() {
   if daemon_healthy; then
     return 0
   fi
   if [ -f "$REGISTRATION" ]; then
-    dim "Restarting background service (versi tidak cocok atau proses mati)"
+    dim "Restarting background service (version mismatch or dead process)"
   fi
   daemon_start
 }
 
 # --- client -----------------------------------------------------------------
-# opencode_client <args...> — menjalankan klien V2 lewat loader glibc dengan
-# environment yang terisolasi dari OpenCode V1 (DB & state terpisah).
+# opencode_client <args...> — runs the V2 client through the glibc loader with
+# an environment isolated from OpenCode V1 (separate DB & state).
 opencode_client() {
-  ensure_compat_libs || die "Gagal membuat shim pustaka glibc di $COMPAT_LIB"
+  ensure_compat_libs || die "Failed to create the glibc library shim in $COMPAT_LIB"
   sanitize_glibc_env
   export XDG_DATA_HOME="$XDG_DATA_DIR"
   export XDG_STATE_HOME="$XDG_STATE_DIR"
@@ -401,7 +402,7 @@ opencode_client() {
 
 # --- misc -------------------------------------------------------------------
 json_field() {
-  # json_field <key> <text> — sederhana, tanpa jq.
+  # json_field <key> <text> — simple, no jq.
   printf '%s' "$2" | sed -n "s/.*\"$1\":\"\\([^\"]*\\)\".*/\\1/p" | head -1
 }
 

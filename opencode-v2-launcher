@@ -1,15 +1,15 @@
 #!/@PREFIX@/bin/bash
-# opencode-v2-launcher — launcher OpenCode V2 untuk Termux.
-# Dipasang ke $PREFIX/bin/opencode-v2 oleh install.sh (shebang diganti ke
-# path bash Termux karena /usr/bin/env tidak ada di Android).
+# opencode-v2-launcher — OpenCode V2 launcher for Termux.
+# Installed to $PREFIX/bin/opencode-v2 by install.sh (the shebang is rewritten to
+# the Termux bash path because /usr/bin/env does not exist on Android).
 #
-# Tugas launcher:
-#   1. Menjalankan binary V2 lewat loader glibc Termux (binary V2 butuh glibc,
-#      sedangkan Android memakai bionic).
-#   2. Memastikan background service hidup. V2 di Termux tidak bisa spawn
-#      service sendiri (process.execPath = path loader, bukan binary asli),
-#      jadi daemon dinyalakan di sini oleh launcher.
-#   3. Memisahkan state/data V2 dari OpenCode V1 (XDG_* khusus).
+# Launcher duties:
+#   1. Run the V2 binary through the Termux glibc loader (the V2 binary needs
+#      glibc, while Android uses bionic).
+#   2. Keep the background service alive. V2 on Termux cannot spawn its own
+#      service (process.execPath = loader path, not the real binary), so the
+#      daemon is started here by the launcher.
+#   3. Keep V2 state/data separate from OpenCode V1 (dedicated XDG_*).
 set -uo pipefail
 
 PREFIX="@PREFIX@"
@@ -25,7 +25,7 @@ if [ -f "$ROOT/lib/common.sh" ]; then
   . "$ROOT/lib/common.sh"
 fi
 
-# Fallback bila common.sh belum terpasang (mis. instalasi setengah jadi).
+# Fallback when common.sh is not installed yet (e.g. half-finished install).
 if ! command -v sanitize_glibc_env >/dev/null 2>&1; then
   sanitize_glibc_env() {
     unset LD_PRELOAD GLIBC_LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
@@ -41,25 +41,25 @@ export PATH="$PREFIX/bin:$PATH"
 export TMPDIR="${TMPDIR:-$PREFIX/tmp}"
 
 if [ ! -x "$REAL" ]; then
-  printf '%s\n' "OpenCode V2 belum terpasang di $REAL" >&2
-  printf '%s\n' "Jalankan: curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash" >&2
+  printf '%s\n' "OpenCode V2 is not installed at $REAL" >&2
+  printf '%s\n' "Run: curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash" >&2
   exit 1
 fi
 if [ ! -x "$LOADER" ]; then
-  printf '%s\n' "Runtime glibc Termux tidak ditemukan ($LOADER)" >&2
-  printf '%s\n' "Jalankan: pkg install glibc-repo glibc termux-exec-glibc" >&2
+  printf '%s\n' "Termux glibc runtime not found ($LOADER)" >&2
+  printf '%s\n' "Run: pkg install glibc-repo glibc termux-exec-glibc" >&2
   exit 1
 fi
 
-# Binary V2 butuh "libc.so", sedangkan glibc Termux hanya menyediakan ld script
-# (file teks) -> loader gagal "invalid ELF header". Shim dibuat di sini.
+# The V2 binary needs "libc.so", but Termux glibc only ships an ld script
+# (a text file) -> the loader fails with "invalid ELF header". Shim built here.
 if command -v ensure_compat_libs >/dev/null 2>&1; then
-  ensure_compat_libs || printf '%s\n' "Gagal membuat shim pustaka glibc di $COMPAT_LIB" >&2
+  ensure_compat_libs || printf '%s\n' "Failed to create the glibc library shim in $COMPAT_LIB" >&2
 fi
 
 run_client() {
-  # Buang LD_PRELOAD bionic dari shell interaktif Termux sebelum menjalankan
-  # binary glibc, jika tidak loader gagal "version `LIBC' not found".
+  # Drop the bionic LD_PRELOAD from the interactive Termux shell before running
+  # a glibc binary, otherwise the loader fails with "version `LIBC' not found".
   sanitize_glibc_env
   if command -v glibc_lib_path >/dev/null 2>&1; then
     exec "$LOADER" --library-path "$(glibc_lib_path)" "$REAL" "$@"
@@ -76,13 +76,13 @@ service_status() {
     printf 'service : running\n'
     printf 'pid     : %s\n' "$pid"
     printf 'url     : %s\n' "${url:-?}"
-    printf 'versi   : %s\n' "${ver:-?}"
+    printf 'version : %s\n' "${ver:-?}"
   else
     printf 'service : stopped\n'
   fi
 }
 
-# --- sub-perintah yang dikelola sendiri -------------------------------------
+# --- self-managed subcommands -----------------------------------------------
 case "${1:-}" in
   service)
     sub="${2:-status}"
@@ -106,7 +106,7 @@ case "${1:-}" in
         exit 0
         ;;
       *)
-        # get/set/unset handled oleh V2 langsung (tidak butuh daemon).
+        # get/set/unset handled by V2 directly (no daemon needed).
         run_client "$@"
         exit $?
         ;;
@@ -116,17 +116,17 @@ case "${1:-}" in
     if [ -f "$ROOT/doctor.sh" ]; then
       exec "$ROOT/doctor.sh" "$@"
     fi
-    printf '%s\n' "doctor.sh belum terpasang di $ROOT" >&2
+    printf '%s\n' "doctor.sh is not installed in $ROOT" >&2
     exit 1
     ;;
   upgrade)
-    # V2 punya perintah 'upgrade' bawaan (npm/curl) yang tidak bekerja di
-    # Termux -> pakai script kita sendiri.
+    # V2 has a built-in 'upgrade' command (npm/curl) that does not work on
+    # Termux -> use our own script.
     shift
     if [ -f "$ROOT/upgrade.sh" ]; then
       exec "$ROOT/upgrade.sh" "$@"
     fi
-    printf '%s\n' "upgrade.sh belum terpasang di $ROOT" >&2
+    printf '%s\n' "upgrade.sh is not installed in $ROOT" >&2
     exit 1
     ;;
   uninstall)
@@ -134,12 +134,12 @@ case "${1:-}" in
     if [ -f "$ROOT/uninstall.sh" ]; then
       exec "$ROOT/uninstall.sh" "$@"
     fi
-    printf '%s\n' "uninstall.sh belum terpasang di $ROOT" >&2
+    printf '%s\n' "uninstall.sh is not installed in $ROOT" >&2
     exit 1
     ;;
 esac
 
-# --- perintah yang butuh server ---------------------------------------------
+# --- commands that need the server ------------------------------------------
 needs_server=1
 case "${1:-}" in
   --version|-v|--help|-h|completions) needs_server=0 ;;
@@ -147,7 +147,7 @@ esac
 
 if [ "$needs_server" -eq 1 ]; then
   if ! daemon_ensure; then
-    printf '%s\n' "Gagal menyalakan background service OpenCode V2." >&2
+    printf '%s\n' "Failed to start the OpenCode V2 background service." >&2
     printf 'Log: %s\n' "$SERVER_LOG" >&2
     exit 1
   fi

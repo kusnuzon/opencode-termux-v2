@@ -1,38 +1,39 @@
-# OpenCode V2 untuk Termux (Android arm64)
+# OpenCode V2 for Termux (Android arm64)
 
-Installer satu-perintah untuk **OpenCode V2** — versi 2.x dari
-[anomalyco/opencode](https://github.com/anomalyco/opencode) — di Termux di
+One-command installer for **OpenCode V2** — the 2.x line of
+[anomalyco/opencode](https://github.com/anomalyco/opencode) — on Termux on
 Android (aarch64/arm64).
 
-OpenCode V2 adalah CLI AI open-source untuk terminal: agent yang bisa membaca
-& menulis file, menjalankan perintah, mencari di web, memakai MCP server, dan
-bekerja lewat sesi. Repo ini membuat V2 **bisa dipakai di Termux**, di mana
-Android tidak punya glibc secara default.
+OpenCode V2 is an open-source AI CLI for the terminal: an agent that can read
+and write files, run commands, search the web, use MCP servers, and work across
+sessions. This repo makes V2 **usable on Termux**, where Android has no glibc by
+default.
 
-> Repo ini tidak berafiliasi dengan proyek opencode resmi. Yang diambil hanya
-> payload binary resmi dari registry npm (`@opencode/cli-linux-arm64`).
+> This repo is not affiliated with the official opencode project. It only pulls
+> the official binary payload from the npm registry
+> (`@opencode/cli-linux-arm64`).
 
 ---
 
-## Pasang (satu perintah)
+## Install (one command)
 
 ```bash
 curl -fsSL -H "Accept: application/vnd.github.raw" \
   https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/install.sh | bash
 ```
 
-Selesai. Perintah `opencode-v2` langsung bisa dipakai.
+Done. The `opencode-v2` command is ready to use.
 
-> Kenapa lewat API GitHub, bukan `raw.githubusercontent.com`? Beberapa jaringan
-> (terutama seluler) menyimpan `raw.githubusercontent.com` di cache proxy
-> berjam-jam — file yang diunduh bisa versi lama. API GitHub selalu segar.
-> Alternatif raw (bisa terlambat beberapa menit):
+> Why go through the GitHub API instead of `raw.githubusercontent.com`? Some
+> networks (mobile in particular) keep `raw.githubusercontent.com` in a proxy
+> cache for hours — the file you download can be an old version. The GitHub API
+> is always fresh. Raw alternative (may lag by a few minutes):
 >
 > ```bash
 > curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash
 > ```
 
-Atau dari clone repo:
+Or from a clone:
 
 ```bash
 git clone https://github.com/kusnuzon/opencode-termux-v2
@@ -40,148 +41,151 @@ cd opencode-termux-v2
 ./install.sh
 ```
 
-## Perintah yang tersedia
+## Available commands
 
-| Perintah | Fungsi |
+| Command | Purpose |
 |---|---|
-| `opencode-v2` | Mode interaktif (TUI) |
-| `opencode-v2 run "prompt"` | Sekali jalan, tanpa TUI |
-| `opencode-v2 service status` | Status background service |
-| `opencode-v2 service start\|stop\|restart` | Kelola background service |
-| `opencode-v2 doctor` | Diagnosis lengkap (layanan, plugin, disk, versi) |
-| `opencode-v2 upgrade` | Perbarui ke versi terbaru |
-| `opencode-v2 --version` | Cek versi terpasang |
+| `opencode-v2` | Interactive mode (TUI) |
+| `opencode-v2 run "prompt"` | Single run, no TUI |
+| `opencode-v2 service status` | Background service status |
+| `opencode-v2 service start\|stop\|restart` | Manage the background service |
+| `opencode-v2 doctor` | Full diagnosis (service, plugins, disk, version) |
+| `opencode-v2 upgrade` | Update to the latest version |
+| `opencode-v2 --version` | Show the installed version |
 
-## Yang dikerjakan installer
+## What the installer does
 
-1. Memasang dependensi dasar lebih dulu: `curl tar unzip gzip coreutils
+1. Installs base dependencies first: `curl tar unzip gzip coreutils
    ca-certificates jq python git sqlite wget openssh gh nodejs yq shellcheck
-   ncdu htop`, lalu opsional `tesseract chromium` (+ `x11-repo`; lewati dengan
-   `--no-extra`). Kalau paket glibc merusak `curl`
-   (`cannot locate symbol SSL_set_quic_…`), `curl`/`libcurl`/`openssl`
-   dipasang ulang otomatis, dan unduhan punya cadangan `wget`/`python`.
-2. Memastikan runtime glibc Termux (`glibc-repo`, `glibc`, `termux-exec-glibc`).
-3. Mengunduh payload resmi `@opencode/cli-linux-arm64` (~100 MB) dari registry
-   npm, **memverifikasi checksum sha512** dari metadata registry.
-4. Mengekstrak binary ke `$PREFIX/share/opencode-v2/opencode.real`.
-5. Memasang launcher `$PREFIX/bin/opencode-v2`.
-6. Memasang plugin bawaan ke `~/.config/opencode/plugins/`:
-   `memory.js` (tool `memory_save`, dual V1+V2) dan `session-title.js`
-   (judul sesi tanpa memanggil model — menghindari error free tier).
-7. Menyalakan background service + smoke test, dengan rollback otomatis bila
-   ada langkah yang gagal.
+   ncdu htop`, then optionally `tesseract chromium` (+ `x11-repo`; skip with
+   `--no-extra`). If the glibc packages break `curl`
+   (`cannot locate symbol SSL_set_quic_…`), `curl`/`libcurl`/`openssl` are
+   reinstalled automatically, and downloads fall back to `wget`/`python`.
+2. Ensures the Termux glibc runtime (`glibc-repo`, `glibc`, `termux-exec-glibc`).
+3. Downloads the official `@opencode/cli-linux-arm64` payload (~100 MB) from the
+   npm registry, **verifying the sha512 checksum** from the registry metadata.
+4. Extracts the binary to `$PREFIX/share/opencode-v2/opencode.real`.
+5. Installs the `$PREFIX/bin/opencode-v2` launcher.
+6. Installs the bundled plugins into `~/.config/opencode/plugins/`:
+   `memory.js` (the `memory_save` tool, dual V1+V2) and `session-title.js`
+   (session titles without calling a model — avoids free-tier errors).
+7. Starts the background service + smoke test, with automatic rollback if any
+   step fails.
 
-## Memori antar sesi (default)
+## Cross-session memory (default)
 
-Memori/AGENTS/RECENT dipasang **otomatis** pada instalasi biasa. Untuk
-melewatinya pakai `--no-memory`; untuk melewati plugin pakai `--no-plugin`.
+Memory/AGENTS/RECENT are installed **automatically** on a normal install. Use
+`--no-memory` to skip them; use `--no-plugin` to skip the plugins.
 
-Repository ini **tidak menyimpan** memori pribadi siapa pun. Yang ada hanya
-mekanismenya; isi memori tetap di perangkatmu.
+This repository **stores nobody's private memory**. It ships only the mechanism;
+the memory content stays on your device.
 
 ```bash
 curl -fsSL -H "Accept: application/vnd.github.raw" \
   https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/install.sh | bash
 ```
 
-Yang dipasang (file yang **sudah ada tidak ditimpa**):
+What gets installed (**existing files are never overwritten**):
 
-| File | Isi |
+| File | Content |
 |---|---|
-| `plugins/memory.js` → `~/.config/opencode/plugins/` | tool `memory_save` (V1+V2) |
-| `plugins/session-title.js` → `~/.config/opencode/plugins/` | judul sesi otomatis tanpa model |
-| `memory/MEMORY.md` → `~/.config/opencode/MEMORY.md` | template kosong, diisi lewat tool `memory_save` |
-| `memory/AGENTS.md` → `~/.config/opencode/AGENTS.md` | template aturan kerja |
+| `plugins/memory.js` → `~/.config/opencode/plugins/` | `memory_save` tool (V1+V2) |
+| `plugins/session-title.js` → `~/.config/opencode/plugins/` | automatic session titles without a model |
+| `memory/MEMORY.md` → `~/.config/opencode/MEMORY.md` | empty template, filled through the `memory_save` tool |
+| `memory/AGENTS.md` → `~/.config/opencode/AGENTS.md` | working-rules template |
 | `memory/opencode.jsonc` → `~/.config/opencode/opencode.jsonc` | `instructions`: MEMORY.md + RECENT.md |
-| `plugins/session-digest.py` → `~/.config/opencode/bin/` | pembuat `RECENT.md` dari DB sesi V1 + V2 |
-| hook `~/.bashrc` | menyegarkan `RECENT.md` tiap `opencode`/`opencode-v2` dibuka |
+| `plugins/session-digest.py` → `~/.config/opencode/bin/` | builds `RECENT.md` from the V1 + V2 session DBs |
+| `~/.bashrc` hook | refreshes `RECENT.md` every time `opencode`/`opencode-v2` starts |
 
-Hasilnya: `MEMORY.md` menyimpan fakta jangka panjang, `RECENT.md` menyimpan
-ringkasan beberapa sesi terakhir, dan keduanya dimuat otomatis di awal sesi
-baru — tanpa data pribadi ikut ke GitHub.
+The result: `MEMORY.md` holds long-term facts, `RECENT.md` holds summaries of the
+last few sessions, and both load automatically at the start of a new session —
+with no private data going to GitHub.
 
-> Memori lama di perangkat tidak hilang: installer melewati file yang sudah ada.
-> Untuk backup, simpan `~/.config/opencode/` sendiri (mis. di repo privat).
+> Existing memory on the device is not lost: the installer skips files that
+> already exist. For backups, save `~/.config/opencode/` yourself (e.g. in a
+> private repo).
 
-## Kenapa butuh hacks?
+## Why the hacks?
 
-V2 adalah binary **glibc** (Bun). Android memakai **bionic**. Termux menyediakan
-glibc lewat paket `glibc-repo`, jadi binary cukup dijalankan lewat loader:
+V2 is a **glibc** binary (Bun). Android uses **bionic**. Termux provides glibc
+through the `glibc-repo` package, so the binary only needs to be run through the
+loader:
 
 ```bash
 $PREFIX/glibc/lib/ld-linux-aarch64.so.1 --library-path $PREFIX/glibc/lib ./opencode
 ```
 
-Masalah kedua lebih halus: **V2 selalu menjalankan background service dengan
-cara spawn `process.execPath`**. Di Termux, `process.execPath` adalah *path
-loader*, bukan binary asli, sehingga proses anak selalu gagal:
+The second problem is subtler: **V2 always starts its background service by
+spawning `process.execPath`**. On Termux, `process.execPath` is the *loader
+path*, not the real binary, so the child process always fails:
 
 ```
 serve: error while loading shared libraries: serve: cannot open shared object file
 ```
 
-Solusi di repo ini: **launcher menyalakan daemon `opencode serve --service`
-sendiri** (lewat loader), lalu daemon mendaftarkan diri di
-`~/.opencode-v2/state/opencode/service.json`. Klien V2 menemukan daemon
-terdaftar itu dan **tidak pernah melakukan spawn** → tidak ada anak yang gagal.
+The fix in this repo: **the launcher starts the `opencode serve --service`
+daemon itself** (through the loader), and the daemon registers itself in
+`~/.opencode-v2/state/opencode/service.json`. The V2 client finds that registered
+daemon and **never spawns** → no child fails.
 
-## Isolasi dari OpenCode V1
+## Isolation from OpenCode V1
 
-V1 dan V2 boleh berdampingan. `opencode-v2` memakai direktori sendiri:
+V1 and V2 can coexist. `opencode-v2` uses its own directories:
 
 | | OpenCode V1 | OpenCode V2 |
 |---|---|---|
-| Perintah | `opencode` | `opencode-v2` |
+| Command | `opencode` | `opencode-v2` |
 | Database | `~/.local/share/opencode/` | `~/.opencode-v2/data/opencode/` |
 | State | `~/.local/state/opencode/` | `~/.opencode-v2/state/opencode/` |
 | Cache | `~/.cache/opencode/` | `~/.opencode-v2/cache/opencode/` |
 | Log | `~/.local/share/opencode/log/` | `~/.opencode-v2/log/server.log` |
 
-Konfigurasi global (`~/.config/opencode/opencode.jsonc`), skill
-(`~/.agents/skills`), dan plugin **dipakai bersama** — jadi provider, model,
-izin (permission), dan memori tetap sama untuk keduanya.
+Global configuration (`~/.config/opencode/opencode.jsonc`), skills
+(`~/.agents/skills`), and plugins **are shared** — so providers, models,
+permissions, and memory stay the same for both.
 
-## Plugin memory (memori lintas sesi)
+## Memory plugin (cross-session memory)
 
-`~/.config/opencode/plugins/memory.js` sekarang **dual-compatible**: V1
-memanggil `server()`, V2 memanggil `setup()`. Satu file, dua versi, tool
-`memory_save` tetap ada di keduanya.
+`~/.config/opencode/plugins/memory.js` is now **dual-compatible**: V1 calls
+`server()`, V2 calls `setup()`. One file, two versions, and the `memory_save`
+tool exists in both.
 
-Plugin ini menulis ke `~/.config/opencode/MEMORY.md` (file yang sudah jadi
-`instructions` di config), dan memasang hook *compaction* supaya model
-memindahkan nilai penting ke memori sebelum context dikompres.
+The plugin writes to `~/.config/opencode/MEMORY.md` (a file already listed as
+`instructions` in the config) and installs a *compaction* hook so the model
+moves important facts into memory before the context is compressed.
 
-Dokumentasi lengkap: [`docs/MIGRATION-V1.md`](docs/MIGRATION-V1.md).
+Full documentation: [`docs/MIGRATION-V1.md`](docs/MIGRATION-V1.md).
 
-## Plugin judul sesi
+## Session title plugin
 
-`~/.config/opencode/plugins/session-title.js` membuat judul sesi dari pesan
-pertama user lewat hook V2 `session.hook("title", ...)` — **tanpa memanggil
-model**, jadi tidak kena `FreeTierError` / "Free usage limit reached" yang
-membuat sesi tanpa judul. Di V1 plugin ini aman (hanya menyediakan `server()`).
+`~/.config/opencode/plugins/session-title.js` builds a session title from the
+user's first message through the V2 `session.hook("title", ...)` hook —
+**without calling a model**, so it avoids the `FreeTierError` / "Free usage
+limit reached" that leaves sessions untitled. Under V1 the plugin is harmless
+(it only provides `server()`).
 
-Kalau ingin judul versi AI lagi (mis. setelah bug upstream diperbaiki), hapus
-atau rename file tersebut. Cek status: `opencode-v2 doctor`.
+To get AI-generated titles again (e.g. once the upstream bug is fixed), delete or
+rename that file. Check the status with `opencode-v2 doctor`.
 
-## Pemecahan masalah
+## Troubleshooting
 
 ```bash
-opencode-v2 doctor        # cek semuanya
+opencode-v2 doctor        # check everything
 cat ~/.opencode-v2/log/server.log
 ```
 
-Masalah yang sering muncul:
+Common problems:
 
-| Gejala | Penyebab & solusi |
+| Symptom | Cause & fix |
 |---|---|
-| `error while loading shared libraries` | Runtime glibc belum ada: `pkg install glibc-repo glibc termux-exec-glibc` |
-| `version 'LIBC' not found (required by .../libtermux-exec-ld-preload.so)` | Shell Termux menyetel `LD_PRELOAD` ke pustaka bionic; loader glibc ikut memuatnya dan gagal. Launcher versi ini membuang `LD_PRELOAD` otomatis — `opencode-v2 upgrade` |
-| `libc.so: invalid ELF header` | Shim pustaka hilang — `opencode-v2 upgrade` (atau `install.sh`) membuat symlink `libc.so -> libc.so.6` di `$PREFIX/share/opencode-v2/lib/compat` |
-| `serve: error while loading shared libraries` | Daemon belum terdaftar — `opencode-v2 service restart` |
-| `Tool result declared output without an output schema` | Plugin tool mengembalikan `output` tanpa skema output — di V2 balik `content` |
-| TUI tidak bisa dibuka | `opencode-v2 run "halo"` untuk memastikan server sehat |
+| `error while loading shared libraries` | glibc runtime missing: `pkg install glibc-repo glibc termux-exec-glibc` |
+| `version 'LIBC' not found (required by .../libtermux-exec-ld-preload.so)` | The Termux shell sets `LD_PRELOAD` to a bionic library; the glibc loader loads it too and fails. This launcher version drops `LD_PRELOAD` automatically — `opencode-v2 upgrade` |
+| `libc.so: invalid ELF header` | Library shim missing — `opencode-v2 upgrade` (or `install.sh`) creates the `libc.so -> libc.so.6` symlink in `$PREFIX/share/opencode-v2/lib/compat` |
+| `serve: error while loading shared libraries` | Daemon not registered — `opencode-v2 service restart` |
+| `Tool result declared output without an output schema` | A plugin tool returned `output` without an output schema — return `content` instead in V2 |
+| TUI won't open | `opencode-v2 run "hello"` to confirm the server is healthy |
 
-Detail arsitektur & catatan teknis: [`docs/TERMUX.md`](docs/TERMUX.md).
+Architecture details and technical notes: [`docs/TERMUX.md`](docs/TERMUX.md).
 
 ## Uninstall
 
@@ -190,9 +194,9 @@ bash <(curl -fsSL -H "Accept: application/vnd.github.raw" \
   https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/uninstall.sh)
 ```
 
-Tambahkan `--purge` untuk ikut menghapus data/sesi/log V2. OpenCode V1 tidak
-disentuh. Jika V2 sudah terpasang, lebih mudah: `opencode-v2 uninstall`.
+Add `--purge` to also delete V2 data/sessions/logs. OpenCode V1 is left untouched.
+If V2 is already installed, it is easier: `opencode-v2 uninstall`.
 
-## Lisensi
+## License
 
-MIT — lihat [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
