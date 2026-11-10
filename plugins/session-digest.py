@@ -1,17 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/python3
-"""session-digest.py — ringkasan otomatis sesi OpenCode terakhir.
+"""session-digest.py — automatic summary of recent OpenCode sessions.
 
-Membaca DB OpenCode V1 (~/.local/share/opencode/opencode.db) dan V2
-(~/.opencode-v2/data/opencode/opencode.db), lalu menulis
-~/.config/opencode/RECENT.md yang dimuat tiap sesi lewat `instructions`
-di opencode.jsonc. Tujuannya: sesi baru langsung tahu apa yang dibahas /
-diperintahkan di sesi sebelumnya tanpa perlu disuruh user.
+Reads the OpenCode V1 database (~/.local/share/opencode/opencode.db) and the V2
+database (~/.opencode-v2/data/opencode/opencode.db), then writes
+~/.config/opencode/RECENT.md, which is loaded in every session through
+`instructions` in opencode.jsonc. The goal: a new session immediately knows what
+was discussed / requested in previous sessions without the user asking.
 
-Dipakai oleh:
-  - ~/.bashrc (menu launcher, sebelum opencode dibuka)
-  - plugin memory.js (setiap memory_save + sebelum compaction)
+Used by:
+  - ~/.bashrc (launcher menu, before opencode starts)
+  - the memory.js plugin (on every memory_save + before compaction)
 
-Batas ukuran MAX_BYTES supaya murah dimuat tiap sesi.
+The MAX_BYTES cap keeps it cheap to load in every session.
 """
 
 import json
@@ -25,10 +25,10 @@ OUT = os.path.join(HOME, ".config", "opencode", "RECENT.md")
 V1_DB = os.path.join(HOME, ".local", "share", "opencode", "opencode.db")
 V2_DB = os.path.join(HOME, ".opencode-v2", "data", "opencode", "opencode.db")
 
-MAX_SESSIONS = 8          # sesi terbaru yang diringkas
-MAX_AGE_DAYS = 21         # sesi lebih tua dari ini dilewati
-MAX_BYTES = 9000          # batas file hasil
-MAX_USER_PROMPTS = 4      # per sesi
+MAX_SESSIONS = 8          # newest sessions to summarize
+MAX_AGE_DAYS = 21         # sessions older than this are skipped
+MAX_BYTES = 9000          # output file size cap
+MAX_USER_PROMPTS = 4      # per session
 TRUNC_USER = 180
 TRUNC_ASSIST = 420
 
@@ -39,7 +39,7 @@ def connect(path):
     if not os.path.exists(path):
         return None
     try:
-        # read-only + immutable supaya tidak pernah mengunci / merusak WAL
+        # read-only + immutable so it never locks / corrupts the WAL
         return sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=3)
     except sqlite3.Error:
         return None
@@ -160,13 +160,13 @@ def label(s):
 
 def render(sessions):
     head = [
-        "# RECENT — ringkasan sesi sebelumnya (auto-generate)",
+        "# RECENT — summary of previous sessions (auto-generated)",
         "",
-        "> Dibuat otomatis oleh `~/.config/opencode/bin/session-digest.py`.",
-        "> Jangan diedit manual; file ini ditimpa setiap kali opencode dibuka",
-        "> atau setelah `memory_save`. Sumber: DB OpenCode V1 + V2.",
-        "> Gunanya: sesi baru langsung tahu apa yang dibahas/diperintahkan",
-        "> sebelumnya tanpa harus disuruh user mengingatkan.",
+        "> Generated automatically by `~/.config/opencode/bin/session-digest.py`.",
+        "> Do not edit manually; this file is overwritten every time opencode starts",
+        "> or after `memory_save`. Source: OpenCode V1 + V2 databases.",
+        "> Purpose: a new session immediately knows what was discussed/requested",
+        "> before, without the user having to remind it.",
         "",
     ]
     body = []
@@ -178,7 +178,7 @@ def render(sessions):
         for p in s["prompts"]:
             block.append("- User: " + p)
         if s["result"]:
-            block.append("- Hasil: " + s["result"])
+            block.append("- Result: " + s["result"])
         block.append("")
         chunk = "\n".join(block)
         if size + len(chunk) > MAX_BYTES:
@@ -186,7 +186,7 @@ def render(sessions):
         body.append(chunk)
         size += len(chunk)
     if not body:
-        body = ["_(belum ada sesi tercatat)_", ""]
+        body = ["_(no sessions recorded yet)_", ""]
     return "\n".join(head + body).rstrip() + "\n"
 
 
@@ -199,7 +199,7 @@ def main():
         try:
             sessions.extend(reader(db))
         except sqlite3.Error as exc:
-            print("lewati %s: %s" % (path, exc), file=sys.stderr)
+            print("skipping %s: %s" % (path, exc), file=sys.stderr)
         finally:
             db.close()
 
@@ -214,7 +214,7 @@ def main():
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(text)
     os.replace(tmp, OUT)
-    print("%s (%d byte, %d sesi)" % (OUT, len(text.encode()), len(sessions)))
+    print("%s (%d bytes, %d sessions)" % (OUT, len(text.encode()), len(sessions)))
 
 
 if __name__ == "__main__":

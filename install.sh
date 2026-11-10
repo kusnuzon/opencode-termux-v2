@@ -324,8 +324,29 @@ _oc_refresh_digest() {
   [ -x "$HOME/.config/opencode/bin/session-digest.py" ] || return 0
   python3 "$HOME/.config/opencode/bin/session-digest.py" >/dev/null 2>&1
 }
-opencode() { _oc_refresh_digest; command opencode "$@"; }
-opencode-v2() { _oc_refresh_digest; command opencode-v2 "$@"; }
+# V1 keeps its own database. Drop the V2 XDG_* values so starting V1 from a V2
+# shell cannot point it at the V2 database ("no session table", blank screen).
+_oc_tty_repair() {
+  [ -t 1 ] || return 0
+  stty sane 2>/dev/null
+  printf '\033[?1049l\033[?25h\033[0m'
+}
+opencode() {
+  _oc_refresh_digest
+  local rc=0
+  ( unset XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME; command opencode "$@" )
+  rc=$?
+  [ "$rc" -ne 0 ] && _oc_tty_repair
+  return "$rc"
+}
+opencode-v2() {
+  _oc_refresh_digest
+  local rc=0
+  command opencode-v2 "$@"
+  rc=$?
+  [ "$rc" -ne 0 ] && _oc_tty_repair
+  return "$rc"
+}
 EOS
     ok "~/.bashrc: session digest refreshes automatically"
   fi
