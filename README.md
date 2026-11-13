@@ -42,7 +42,8 @@ Done — `opencode-v2` is ready.
 2. 🧬 glibc runtime (`glibc-repo`, `glibc`, `termux-exec-glibc`)
 3. ⬇️ official `@opencode/cli-linux-arm64` payload (~100 MB), **sha512 verified**
 4. 📂 binary → `$PREFIX/share/opencode-v2/opencode.real` + launcher in `$PREFIX/bin`
-5. 🔌 plugins → `~/.config/opencode/plugins/` (`memory.js`, `session-title.js`)
+5. 🔌 plugins → `~/.config/opencode/plugins/` (`memory.js`, `session-title.js`,
+   `update-notice.js`) + tools in `~/.config/opencode/bin/` (`session-digest.py`, `kuota`)
 6. ▶️ background service start + smoke test, **automatic rollback** on failure
 
 Options: `--no-memory`, `--no-plugin`, `--check`.
@@ -68,7 +69,9 @@ Options: `--no-memory`, `--no-plugin`, `--check`.
 | `memory/MEMORY.md` | long-term facts (template, filled by the tool) |
 | `memory/AGENTS.md` | working-rules template |
 | `memory/opencode.jsonc` | `instructions`: MEMORY.md + RECENT.md |
-| `plugins/session-digest.py` | builds `RECENT.md` from the session DBs |
+| `plugins/session-digest.py` | builds `RECENT.md` (recent sessions + open items) |
+| `plugins/update-notice.js` | shows a codemux update notice inside the session |
+| `plugins/kuota.py` → `kuota` | estimates the remaining free-model quota |
 | `~/.bashrc` hook | refreshes `RECENT.md` on every opencode start |
 
 This repo ships **mechanism only** — nobody's private memory is stored here, and
