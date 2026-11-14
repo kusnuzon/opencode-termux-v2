@@ -40,7 +40,7 @@ Done — `opencode-v2` is ready.
 ## 🧰 What the installer does
 
 1. 📦 base dependencies first (`curl tar unzip gzip coreutils ca-certificates jq
-   python git sqlite wget openssh gh nodejs yq shellcheck ncdu htop which`), optionally
+   python git sqlite wget openssh gh ncdu htop which`), optionally
    `tesseract chromium` (`--no-extra` to skip); heals `curl` if glibc broke it
 2. 🧬 glibc runtime (`glibc-repo`, `glibc`, `termux-exec-glibc`)
 3. ⬇️ official `@opencode/cli-linux-arm64` payload (~100 MB), **sha512 verified**
