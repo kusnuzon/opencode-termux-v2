@@ -2,7 +2,9 @@
 # install.sh — install OpenCode V2 on Termux (Android arm64).
 #
 # Usage (one command):
-#   curl -fsSL "https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh?$(date +%s)" | bash
+#   ( curl -fsSL -H "Accept: application/vnd.github.raw" \
+#       https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/install.sh \
+#     || curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh ) | bash
 #
 # From a repo clone:
 #   git clone https://github.com/kusnuzon/opencode-termux-v2 && cd opencode-termux-v2 && ./install.sh
@@ -129,7 +131,9 @@ Options:
   -h, --help        Show this help
 
 Example:
-  curl -fsSL "https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh?$(date +%s)" | bash
+  ( curl -fsSL -H "Accept: application/vnd.github.raw" \
+      https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/install.sh \
+    || curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh ) | bash
 EOF
 }
 
