@@ -47,6 +47,31 @@ die() { err "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# --- GitHub token (avoid the 60 requests/hour anonymous API limit) -----------
+# GitHub API calls without a token are capped at 60/hour and answer HTTP 403
+# once the quota is gone, which used to make "download failed" look like a
+# broken installer. Reuse a token when one is available: env first, then gh.
+_OC_GH_TOKEN_CACHE=""
+oc_gh_token() {
+  if [ -n "$_OC_GH_TOKEN_CACHE" ]; then
+    printf '%s' "$_OC_GH_TOKEN_CACHE"
+    return 0
+  fi
+  local tok="${OPENCODE_V2_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
+  if [ -z "$tok" ] && have gh; then
+    tok="$(gh auth token --hostname github.com 2>/dev/null || true)"
+  fi
+  _OC_GH_TOKEN_CACHE="$tok"
+  printf '%s' "$tok"
+}
+
+oc_api_url() {
+  case "$1" in
+    "https://api.github.com/"*) return 0 ;;
+  esac
+  return 1
+}
+
 # --- environment checks -----------------------------------------------------
 is_termux() {
   [ -n "${TERMUX_VERSION:-}" ] || [ -d "$PREFIX/glibc" ] || [ "${PREFIX:-}" = "/data/data/com.termux/files/usr" ]
@@ -74,7 +99,9 @@ apt_update_retry() {
   return 1
 }
 
-curl_ok() { curl -fsS --max-time 10 -o /dev/null https://github.com >/dev/null 2>&1; }
+# Any completed HTTPS request means curl works: -f would turn a GitHub API 403
+# (quota exhausted) into a false "curl is broken" and trigger a pointless reinstall.
+curl_ok() { curl -sS --max-time 10 -o /dev/null https://github.com >/dev/null 2>&1; }
 
 heal_curl() {
   curl_ok && return 0
@@ -88,32 +115,43 @@ heal_curl() {
 
 # download_url <url> <dest> [accept] — curl → wget → python.
 download_url() {
-  local url="$1" dest="$2" accept="${3:-}" part="$2.part"
+  local url="$1" dest="$2" accept="${3:-}" part="$2.part" tok=""
+  local -a hdr=() whdr=()
+  if oc_api_url "$url"; then
+    tok="$(oc_gh_token)"
+  fi
+  [ -n "$accept" ] && hdr+=(-H "Accept: $accept")
+  [ -n "$tok" ] && hdr+=(-H "Authorization: Bearer $tok")
   mkdir -p "$(dirname "$dest")" || return 1
   rm -f "$part"
-  if [ -n "$accept" ]; then
-    curl -fsSL --max-time 300 -H "Accept: $accept" "$url" -o "$part" 2>/dev/null
-  else
-    curl -fsSL --max-time 300 "$url" -o "$part" 2>/dev/null
+  if have curl; then
+    curl -fsSL --max-time 300 "${hdr[@]+"${hdr[@]}"}" "$url" -o "$part" 2>/dev/null
+    if [ -s "$part" ]; then mv -f "$part" "$dest"; return 0; fi
+    rm -f "$part"
   fi
-  if [ -s "$part" ]; then mv -f "$part" "$dest"; return 0; fi
-  rm -f "$part"
-  if have wget && wget -q --timeout=60 -O "$part" "$url" >/dev/null 2>&1 && [ -s "$part" ]; then
+  [ -n "$tok" ] && whdr+=("--header=Authorization: Bearer $tok")
+  if have wget && wget -q --timeout=60 "${whdr[@]+"${whdr[@]}"}" -O "$part" "$url" >/dev/null 2>&1 && [ -s "$part" ]; then
     mv -f "$part" "$dest"; return 0
   fi
   rm -f "$part"
   if have python; then
-    python - "$url" "$part" "$accept" <<'PY' >/dev/null 2>&1 || true
+    python - "$url" "$part" "$accept" "$tok" <<'PY' >/dev/null 2>&1 || true
 import sys, urllib.request
 url, dest, accept = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "")
+token = sys.argv[4] if len(sys.argv) > 4 else ""
 req = urllib.request.Request(url, headers={"User-Agent": "opencode-v2"})
 if accept:
     req.add_header("Accept", accept)
+if token:
+    req.add_header("Authorization", "Bearer " + token)
 open(dest, "wb").write(urllib.request.urlopen(req, timeout=60).read())
 PY
     [ -s "$part" ] && { mv -f "$part" "$dest"; return 0; }
   fi
   rm -f "$part"
+  if oc_api_url "$url" && [ -z "$tok" ]; then
+    warn "download failed: GitHub's API allows 60 requests/hour without a token (HTTP 403). Run 'gh auth login' or export GITHUB_TOKEN, then retry."
+  fi
   return 1
 }
 

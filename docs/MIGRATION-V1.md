@@ -122,7 +122,7 @@ return { content: "Saved to MEMORY.md (...)" }
 
 ```bash
 # 1. install V2 (V1 is not touched)
-curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh?$(date +%s)" | bash
 
 # 2. check
 opencode-v2 doctor

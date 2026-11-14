@@ -2,7 +2,7 @@
 # install.sh — install OpenCode V2 on Termux (Android arm64).
 #
 # Usage (one command):
-#   curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash
+#   curl -fsSL "https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh?$(date +%s)" | bash
 #
 # From a repo clone:
 #   git clone https://github.com/kusnuzon/opencode-termux-v2 && cd opencode-termux-v2 && ./install.sh
@@ -17,14 +17,27 @@ REPO_SLUG="kusnuzon/opencode-termux-v2"
 RAW_BASE="https://raw.githubusercontent.com/${REPO_SLUG}"
 DEFAULT_REF="main"
 
+# GitHub API calls without a token are limited to 60 requests/hour and then
+# answer HTTP 403. This script runs before lib/common.sh is loaded, so resolve
+# the token here too (env first, then the gh CLI when it is already installed).
+gh_token_early() {
+  local tok="${OPENCODE_V2_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
+  if [ -z "$tok" ] && command -v gh >/dev/null 2>&1; then
+    tok="$(gh auth token --hostname github.com 2>/dev/null || true)"
+  fi
+  printf '%s' "$tok"
+}
+API_TOKEN="$(gh_token_early)"
+
 # fetch_remote <repo-path> <destination-file> [ref]
 # Fetches a file from GitHub. It tries the API first (raw header) because
 # raw.githubusercontent.com often serves a stale version from network proxy
 # caches; the API is always fresh. If the API fails (rate limit), use raw.
 fetch_remote() {
   local path="$1" dest="$2" ref="${3:-$DEFAULT_REF}"
-  if curl -fsSL --max-time 60 \
-    -H "Accept: application/vnd.github.raw" \
+  local -a hdr=(-H "Accept: application/vnd.github.raw")
+  [ -n "$API_TOKEN" ] && hdr+=(-H "Authorization: Bearer $API_TOKEN")
+  if curl -fsSL --max-time 60 "${hdr[@]}" \
     "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" \
     -o "$dest" 2>/dev/null; then
     return 0
@@ -37,11 +50,14 @@ fetch_remote() {
     wget -q --timeout=60 -O "$dest" "${RAW_BASE}/${ref}/${path}" >/dev/null 2>&1 && return 0
   fi
   if command -v python >/dev/null 2>&1; then
-    python - "$dest" "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" <<'PY' >/dev/null 2>&1
+    python - "$dest" "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" "$API_TOKEN" <<'PY' >/dev/null 2>&1
 import sys, urllib.request
 dest, url = sys.argv[1], sys.argv[2]
+token = sys.argv[3] if len(sys.argv) > 3 else ""
 req = urllib.request.Request(url, headers={"User-Agent": "opencode-v2",
                                            "Accept": "application/vnd.github.raw"})
+if token:
+    req.add_header("Authorization", "Bearer " + token)
 open(dest, "wb").write(urllib.request.urlopen(req, timeout=60).read())
 PY
     [ -s "$dest" ] && return 0
@@ -113,7 +129,7 @@ Options:
   -h, --help        Show this help
 
 Example:
-  curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash
+  curl -fsSL "https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh?$(date +%s)" | bash
 EOF
 }
 
@@ -138,7 +154,6 @@ printf '%s\n' "│  OpenCode V2 installer — Termux / Android       │"
 printf '%s\n' "╰──────────────────────────────────────────────╯"
 
 require_termux
-ensure_tools
 
 CURRENT="$(installed_version)"
 info "PREFIX                   : $PREFIX"
@@ -181,6 +196,8 @@ if [ "$DRY_RUN" -eq 1 ]; then
   [ "$WITH_MEMORY" -eq 1 ] && info " 10. Install private memory (MEMORY.md, AGENTS.md, RECENT.md) + ~/.bashrc hook"
   exit 0
 fi
+
+ensure_tools
 
 if [ -n "$CURRENT" ] && [ "$CURRENT" != "unknown" ] && [ "$CURRENT" = "$TARGET" ] && [ -x "$REAL" ] && [ "$UPGRADE" -eq 0 ]; then
   ok "Version $TARGET is already installed"

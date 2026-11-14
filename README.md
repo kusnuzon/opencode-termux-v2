@@ -25,15 +25,16 @@ Dependencies are installed by the script.
 ## ⚡ 1-Click Install
 
 ```bash
-curl -fsSL -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/install.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh?$(date +%s)" | bash
 ```
 
 Done — `opencode-v2` is ready.
 
-> The GitHub API is used on purpose: mobile networks keep
-> `raw.githubusercontent.com` cached for hours, so the raw URL can serve an old
-> installer. From a clone: `./install.sh`.
+> The cache-busting `?<timestamp>` keeps mobile-network proxies from serving an
+> old installer. The script itself refreshes its support files through the
+> GitHub API and automatically reuses `GITHUB_TOKEN`/`GH_TOKEN`/`gh auth token`,
+> so the anonymous 60-requests/hour limit no longer breaks the install.
+> From a clone: `./install.sh`.
 
 ## 🧰 What the installer does
 
@@ -150,8 +151,7 @@ More: [`docs/TERMUX.md`](docs/TERMUX.md) · [`docs/MIGRATION-V1.md`](docs/MIGRAT
 ```bash
 opencode-v2 uninstall      # already installed
 # or
-curl -fsSL -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/kusnuzon/opencode-termux-v2/contents/uninstall.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/uninstall.sh?$(date +%s)" | bash
 ```
 
 `--purge` also removes V2 data, sessions and logs. V1 is untouched. To manage
