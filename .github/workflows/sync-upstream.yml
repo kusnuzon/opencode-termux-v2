@@ -1,10 +1,10 @@
 name: Sync upstream opencode v2
 
-# Memantau versi resmi OpenCode V2 (package @opencode/cli) lalu memperbarui
-# file VERSION dan menerbitkan Release mirror di repo ini.
+# Watches the official OpenCode V2 version (package @opencode/cli), bumps the
+# VERSION file and publishes the mirror release for this repo.
 #
-# Payload TIDAK dilampirkan ke Release (besar ~100 MB dan install.sh mengambil
-# langsung dari registry npm dengan verifikasi sha512), jadi release ini ringan.
+# The payload is NOT attached to the release (~100 MB); install.sh downloads it
+# straight from the npm registry with sha512 verification, so releases stay light.
 
 on:
   schedule:
@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Versi target (opsional, mis. 2.1.2). Kosongkan = pakai terbaru.'
+        description: 'Target version (optional, e.g. 2.1.2). Empty = latest.'
         required: false
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - id: meta
-        name: Tentukan versi V2 terbaru
+        name: Resolve the latest V2 version
         env:
           TARGET: ${{ github.event.inputs.version }}
         run: |
@@ -35,21 +35,21 @@ jobs:
               | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)
           fi
           if [ -z "$ver" ]; then
-            echo "Gagal menentukan versi OpenCode V2" >&2
+            echo "Could not resolve the OpenCode V2 version" >&2
             exit 1
           fi
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "OpenCode V2: $ver"
 
       - id: bump
-        name: Perbarui file VERSION
+        name: Bump the VERSION file
         env:
           VER: ${{ steps.meta.outputs.ver }}
         run: |
           current=$(cat VERSION)
           if [ "$current" = "$VER" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Sudah versi $VER, tidak ada perubahan."
+            echo "Already version $VER, nothing to do."
             exit 0
           fi
           echo "$VER" > VERSION
@@ -60,28 +60,29 @@ jobs:
           git push
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Terbitkan Release mirror
+      - name: Publish the mirror release
         if: steps.bump.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: opencode-termux-v2-${{ steps.meta.outputs.ver }}
           name: opencode v2 ${{ steps.meta.outputs.ver }} (Termux / Android)
           body: |
-            Mirror versi OpenCode V2 ${{ steps.meta.outputs.ver }} untuk Termux/Android.
+            OpenCode V2 ${{ steps.meta.outputs.ver }} mirror for Termux/Android.
 
-            - Binary resmi: `@opencode/cli-linux-arm64` dari registry npm (diunduh + diverifikasi sha512 oleh `install.sh`)
-            - Launcher: `opencode-v2-launcher` (menjalankan binary lewat loader glibc Termux, background service dijalankan manual karena `process.execPath` V2 = path loader)
+            - Official binary: `@opencode/cli-linux-arm64` from the npm registry (downloaded and sha512-verified by `install.sh`)
+            - Launcher: `opencode-v2-launcher` (runs the binary through the Termux glibc loader; the background service is started manually because V2's `process.execPath` is the loader path)
+            - Built-in updater: the TUI `/update` command works — the injected payload is adopted by the launcher on the next start
 
-            Pasang di Termux:
+            Install on Termux:
             ```bash
             curl -fsSL https://raw.githubusercontent.com/kusnuzon/opencode-termux-v2/main/install.sh | bash
             ```
 
-            Perbarui:
+            Update:
             ```bash
             opencode-v2 upgrade
             ```
           prerelease: false
 
-      - name: Ringkasan
-        run: echo "OpenCode V2 ${{ steps.meta.outputs.ver }} diperiksa."
+      - name: Summary
+        run: echo "Checked OpenCode V2 ${{ steps.meta.outputs.ver }}."
