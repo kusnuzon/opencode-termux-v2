@@ -57,6 +57,69 @@ if command -v ensure_compat_libs >/dev/null 2>&1; then
   ensure_compat_libs || printf '%s\n' "Failed to create the glibc library shim in $COMPAT_LIB" >&2
 fi
 
+# --- built-in updater (the TUI /update command) ------------------------------
+# The V2 updater only detects the "curl" install method when
+# realpath(process.execPath) equals realpath(~/.opencode/bin/opencode). Termux
+# runs the payload through the glibc loader, so process.execPath is the loader:
+# keeping ~/.opencode/bin/opencode as a symlink to that loader makes the updater
+# choose "curl" and download the official payload to that path, replacing the
+# symlink. adopt_updater_payload() installs it as $REAL on the next start.
+UPDATER_BIN="$HOME/.opencode/bin/opencode"
+
+updater_lib_path() {
+  if command -v glibc_lib_path >/dev/null 2>&1; then
+    glibc_lib_path
+  else
+    printf '%s' "$GLIBC_LIB"
+  fi
+}
+
+adopt_updater_payload() {
+  mkdir -p "$HOME/.opencode/bin"
+  [ -L "$UPDATER_BIN" ] && return 0
+  if [ ! -f "$UPDATER_BIN" ]; then
+    ln -sfn "$LOADER" "$UPDATER_BIN"
+    return 0
+  fi
+
+  # A regular file here means the built-in updater just downloaded a payload.
+  local size magic version
+  size="$(wc -c <"$UPDATER_BIN" | tr -d ' ')"
+  magic="$(head -c 4 "$UPDATER_BIN" 2>/dev/null | od -An -tx1 | tr -d ' \n')"
+  version=""
+  if [ "$magic" = "7f454c46" ] && [ "${size:-0}" -gt 50000000 ]; then
+    version="$(
+      sanitize_glibc_env
+      "$LOADER" --library-path "$(updater_lib_path)" "$UPDATER_BIN" --version 2>/dev/null |
+        tail -1 | awk '{print $NF}'
+    )"
+    version="${version#v}"
+    case "$version" in
+      [0-9]*.[0-9]*) ;;
+      *) version="" ;;
+    esac
+  fi
+
+  if [ -z "$version" ]; then
+    rm -f "$UPDATER_BIN"
+    ln -sfn "$LOADER" "$UPDATER_BIN"
+    printf '%s\n' "Discarded the payload left by /update: not a runnable OpenCode build" >&2
+    return 0
+  fi
+
+  printf '%s\n' "Applying the OpenCode payload downloaded by /update: $version"
+  mv -f "$REAL" "$ROOT/opencode.real.bak"
+  mv -f "$UPDATER_BIN" "$REAL.new"
+  chmod 755 "$REAL.new"
+  mv -f "$REAL.new" "$REAL"
+  printf '%s\n' "$version" >"$VERSION_FILE"
+  ln -sfn "$LOADER" "$UPDATER_BIN"
+  write_state >/dev/null 2>&1 || true
+  return 0
+}
+
+adopt_updater_payload
+
 run_client() {
   # Drop the bionic LD_PRELOAD from the interactive Termux shell before running
   # a glibc binary, otherwise the loader fails with "version `LIBC' not found".
@@ -119,9 +182,10 @@ case "${1:-}" in
     printf '%s\n' "doctor.sh is not installed in $ROOT" >&2
     exit 1
     ;;
-  upgrade)
-    # V2 has a built-in 'upgrade' command (npm/curl) that does not work on
-    # Termux -> use our own script.
+  upgrade|update)
+    # V2 has a built-in 'upgrade'/'update' command (npm/curl) that does not work
+    # on Termux -> use our own script. The TUI /update command is handled by
+    # adopt_updater_payload() above.
     shift
     if [ -f "$ROOT/upgrade.sh" ]; then
       exec "$ROOT/upgrade.sh" "$@"

@@ -136,6 +136,54 @@ opencode-v2 service set disabled false   # or unset
 
 This repo runs the daemon explicitly, so this mode is irrelevant.
 
+### Trap: the built-in updater cannot detect the install method
+
+The same root cause hits `opencode update` and the TUI `/update` command:
+
+```
+■  Could not detect the installation method. Pass --method to choose how to upgrade OpenCode.
+```
+
+`packages/cli/src/services/updater.ts` decides:
+
+```ts
+const executable  = realPath(process.execPath)
+const curlBinary  = realPath(join(home, ".opencode", "bin", "opencode"))
+if (executable === curlBinary) return "curl"   // <-- never true on Termux
+```
+
+On Termux `process.execPath` is the glibc loader, and nothing lives in
+`~/.opencode/bin`, so the updater falls through to the npm/pnpm/bun/yarn checks
+and gives up.
+
+### Fix: keep `~/.opencode/bin/opencode` as a symlink to the loader
+
+```
+~/.opencode/bin/opencode -> $PREFIX/glibc/lib/ld-linux-aarch64.so.1
+```
+
+`realPath()` follows the symlink, both sides become the loader, and the
+updater reports `Using method: curl`. It then downloads the official installer
+(`https://opencode.ai/v2/install`) and runs it with
+`--version <v> --no-modify-path`, which writes the new payload to
+`~/.opencode/bin/opencode` — replacing the symlink.
+
+The launcher adopts that payload on the next start
+(`adopt_updater_payload()`): it checks the ELF magic and size, runs
+`<payload> --version` through the loader, moves it to
+`$PREFIX/share/opencode-v2/opencode.real`, updates `VERSION`, keeps the previous
+payload as `opencode.real.bak`, and restores the symlink. A payload that does
+not run is discarded and the symlink is rebuilt.
+
+Notes:
+
+- the official installer calls `which`; Termux has no `which` by default →
+  `pkg install which` (now part of the installer's dependency list);
+- `opencode-v2 upgrade` and `opencode-v2 update` are still routed to
+  `upgrade.sh`, so the shell path keeps its own backup + rollback;
+- the TUI itself keeps running the old payload until it is restarted, which is
+  what its "restart to use vX" message means.
+
 ## 3. V1 vs V2 data isolation
 
 V2 reads its data locations from `XDG_DATA_HOME`, `XDG_STATE_HOME`, and

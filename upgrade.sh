@@ -59,6 +59,8 @@ fi
 
 ensure_glibc
 ensure_compat_libs || die "Failed to create the glibc library shim in $COMPAT_LIB"
+# Keep the TUI /update command working after the payload moved.
+ensure_updater_link
 
 BACKUP="$ROOT/opencode.real.bak"
 if [ -x "$REAL" ]; then

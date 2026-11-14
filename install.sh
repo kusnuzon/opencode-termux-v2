@@ -175,9 +175,10 @@ if [ "$DRY_RUN" -eq 1 ]; then
   info "  4. Verify the sha512 checksum from the npm registry"
   info "  5. Install the payload to $ROOT/opencode.real"
   info "  6. Install the launcher to $LAUNCHER (command: opencode-v2)"
-  info "  7. Start the background service + smoke test"
-  [ "$NO_PLUGIN" -eq 0 ] && info "  8. Install the bundled plugins (memory_save + session titles) into ~/.config/opencode/plugins/"
-  [ "$WITH_MEMORY" -eq 1 ] && info "  9. Install private memory (MEMORY.md, AGENTS.md, RECENT.md) + ~/.bashrc hook"
+  info "  7. Enable the built-in updater (TUI /update) via $UPDATER_BIN"
+  info "  8. Start the background service + smoke test"
+  [ "$NO_PLUGIN" -eq 0 ] && info "  9. Install the bundled plugins (memory_save + session titles) into ~/.config/opencode/plugins/"
+  [ "$WITH_MEMORY" -eq 1 ] && info " 10. Install private memory (MEMORY.md, AGENTS.md, RECENT.md) + ~/.bashrc hook"
   exit 0
 fi
 
@@ -210,6 +211,13 @@ sed "s|@PREFIX@|$PREFIX|g" "$LAUNCHER_SRC" >"$LAUNCHER.tmp"
 mv "$LAUNCHER.tmp" "$LAUNCHER"
 chmod 755 "$LAUNCHER"
 ok "Launcher installed: $LAUNCHER (command: opencode-v2)"
+
+# --- built-in updater -------------------------------------------------------
+# Makes the TUI /update command (and `opencode update`) work: the updater only
+# recognises the "curl" install method when ~/.opencode/bin/opencode resolves to
+# the running executable, which on Termux is the glibc loader.
+ensure_updater_link
+ok "Built-in updater links to the glibc loader: $UPDATER_BIN"
 
 # --- support scripts into $ROOT --------------------------------------------
 mkdir -p "$ROOT/lib"

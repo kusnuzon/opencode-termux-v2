@@ -40,6 +40,15 @@ else
   check "Shim libc.so (loader)" fail "missing — the V2 binary fails to start (invalid ELF header); run install.sh/upgrade.sh"
 fi
 if [ -f "$PREFIX/etc/tls/cert.pem" ]; then check "TLS certificate" ok "termux/etc/tls/cert.pem"; else check "TLS certificate" warn "cert.pem not found (HTTPS may fail)"; fi
+if [ -L "$UPDATER_BIN" ] && [ "$(readlink "$UPDATER_BIN")" = "$LOADER" ]; then
+  check "Built-in updater (TUI /update)" ok "$UPDATER_BIN -> loader"
+elif [ -f "$UPDATER_BIN" ]; then
+  check "Built-in updater (TUI /update)" warn "payload waiting to be adopted — restart opencode-v2"
+elif command -v which >/dev/null 2>&1; then
+  check "Built-in updater (TUI /update)" warn "link missing — run opencode-v2 upgrade (or install.sh)"
+else
+  check "Built-in updater (TUI /update)" warn "needs pkg install which + opencode-v2 upgrade"
+fi
 
 # --- bionic LD_PRELOAD regression -------------------------------------------
 # The Termux interactive shell sets LD_PRELOAD to a bionic library. The glibc

@@ -185,7 +185,27 @@ sanitize_glibc_env() {
   export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
 }
 
-BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh nodejs yq shellcheck ncdu htop"
+# --- built-in updater (the TUI /update command) ------------------------------
+# `opencode update` and the TUI `/update` command only detect the "curl" install
+# method when realpath(process.execPath) equals realpath(~/.opencode/bin/opencode).
+# Termux runs the payload through the glibc loader, so process.execPath is the
+# loader: keeping ~/.opencode/bin/opencode as a symlink to that loader makes the
+# updater choose "curl", download the official payload to that path and replace
+# the symlink. The launcher adopts that payload on the next start.
+UPDATER_BIN="${UPDATER_BIN:-$HOME/.opencode/bin/opencode}"
+
+ensure_updater_link() {
+  mkdir -p "$(dirname "$UPDATER_BIN")"
+  if [ -f "$UPDATER_BIN" ] && [ ! -L "$UPDATER_BIN" ]; then
+    return 0          # a downloaded payload is waiting; the launcher adopts it
+  fi
+  if [ -L "$UPDATER_BIN" ] && [ "$(readlink "$UPDATER_BIN")" = "$LOADER" ]; then
+    return 0
+  fi
+  ln -sfn "$LOADER" "$UPDATER_BIN"
+}
+
+BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh nodejs yq shellcheck ncdu htop which"
 # Optional/large: needs x11-repo; failure is only a warning.
 EXTRA_PKGS="tesseract chromium"
 

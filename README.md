@@ -13,6 +13,7 @@ glibc loader, background service, and memory handled for you.
 - 🧬 glibc shim + automatic `LD_PRELOAD` cleanup (Android/bionic friendly)
 - 🧠 cross-session memory — `MEMORY.md` + `RECENT.md`, loaded every session
 - 🏷️ session titles without calling a model (no free-tier errors)
+- 🔄 the built-in updater works — `/update` inside the TUI really updates
 - 🩺 `opencode-v2 doctor` — service, plugins, disk, version in one screen
 - 🧷 fully isolated from OpenCode V1 (own DB, state, cache, logs)
 
@@ -37,7 +38,7 @@ Done — `opencode-v2` is ready.
 ## 🧰 What the installer does
 
 1. 📦 base dependencies first (`curl tar unzip gzip coreutils ca-certificates jq
-   python git sqlite wget openssh gh nodejs yq shellcheck ncdu htop`), optionally
+   python git sqlite wget openssh gh nodejs yq shellcheck ncdu htop which`), optionally
    `tesseract chromium` (`--no-extra` to skip); heals `curl` if glibc broke it
 2. 🧬 glibc runtime (`glibc-repo`, `glibc`, `termux-exec-glibc`)
 3. ⬇️ official `@opencode/cli-linux-arm64` payload (~100 MB), **sha512 verified**
@@ -58,7 +59,27 @@ Options: `--no-memory`, `--no-plugin`, `--check`.
 | `opencode-v2 service start\|stop\|restart` | control the daemon |
 | `opencode-v2 doctor` | full diagnosis |
 | `opencode-v2 upgrade` | update to the latest version |
+| `/update` (inside the TUI) | same update, from inside the session |
 | `opencode-v2 --version` | installed version |
+
+## 🔄 Updating
+
+Two ways, both land on `$PREFIX/share/opencode-v2/opencode.real`:
+
+| Where | Command |
+|---|---|
+| inside the TUI | `/update` — pick the version, confirm, restart when told |
+| terminal | `opencode-v2 upgrade` (or `opencode-v2 upgrade --check`) |
+
+The TUI updater only recognises the `curl` install method when
+`~/.opencode/bin/opencode` resolves to the running executable. On Termux that
+executable is the glibc loader, so the installer keeps
+`~/.opencode/bin/opencode` as a **symlink to the loader**: the updater then
+downloads the official payload there, and the launcher adopts it on the next
+start (old payload kept as `opencode.real.bak`). `opencode-v2 doctor` shows the
+state of that link (`Built-in updater (TUI /update)`).
+
+Requires `which` (`pkg install which`) — the official installer calls it.
 
 ## 🧠 Cross-session memory (default)
 
@@ -119,6 +140,8 @@ cat ~/.opencode-v2/log/server.log
 | `serve: error while loading shared libraries` | daemon not registered → `opencode-v2 service restart` |
 | `Tool result declared output without an output schema` | plugin returned `output`; V2 wants `content` |
 | TUI won't open | `opencode-v2 run "hello"` to check the server |
+| `/update` says `Could not detect the installation method` | old install → `pkg install which` then `opencode-v2 upgrade` |
+| `/update` says `The OpenCode installer failed` | `pkg install which` (the installer needs it), then retry |
 
 More: [`docs/TERMUX.md`](docs/TERMUX.md) · [`docs/MIGRATION-V1.md`](docs/MIGRATION-V1.md)
 

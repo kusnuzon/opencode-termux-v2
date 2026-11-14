@@ -41,6 +41,12 @@ if [ -d "$ROOT" ]; then
   ok "Payload and helper scripts removed: $ROOT"
 fi
 
+if [ -L "$UPDATER_BIN" ] && [ "$(readlink "$UPDATER_BIN")" = "$LOADER" ]; then
+  rm -f "$UPDATER_BIN"
+  rmdir "$(dirname "$UPDATER_BIN")" 2>/dev/null || true
+  ok "Built-in updater symlink removed: $UPDATER_BIN"
+fi
+
 if [ "$PURGE_DATA" -eq 1 ]; then
   if [ -d "$V2HOME" ]; then
     rm -rf "$V2HOME"
