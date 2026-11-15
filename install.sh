@@ -401,7 +401,7 @@ opencode-v2() {
   return "$rc"
 }
 EOS
-    ok "~/.bashrc: session digest refreshes automatically"
+    ok '$HOME/.bashrc: session digest refreshes automatically'
   fi
 fi
 
