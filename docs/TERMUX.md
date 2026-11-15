@@ -227,11 +227,67 @@ schema **must not** return `output` (it crashes with
 `~/.agents/skills/<name>/SKILL.md` is still detected by V2 (auto-discovery),
 just like V1. No special action needed.
 
-## 6. Size & disk
+## 6. Downloads, fallbacks and verification
 
-- npm tarball `@opencode/cli-linux-arm64`: ~97 MB (compressed).
-- Extracted binary: ~209 MB.
-- Space requirement: set aside **>= 400 MB** free during the install.
+The payload is only as good as the download that produced it, and on a mobile
+connection a cut transfer is the normal failure, not the exception.
+
+### Order of sources
+
+| Step | Source | Verification |
+|---|---|---|
+| 1 | GitHub release mirror `opencode-termux-v2-<version>/opencode-v2-linux-arm64.tar.gz` | `sha256` from the sibling `.sha256` asset; a mismatch retries once, then the mirror is ignored |
+| 2 | npm registry `@opencode/cli-linux-arm64` tarball | `sha512` from the registry metadata |
+
+Both go through `download_url <url> <dest> [accept] [progress]` in `lib/common.sh`,
+which tries `curl` → `wget` → `python`.
+
+### Trap: a timed-out `curl` leaves a half-written file
+
+`curl` exits **28** on `--max-time` after it has already written part of a large
+payload. Accepting any non-empty `.part` therefore installs a truncated tarball
+that only fails later, at the unpack or the checksum. `download_url` accepts the
+file **only when the exit status is 0**, drops it otherwise, and lets the next
+fallback run.
+
+`tests/download.sh` pins the whole chain with fake `curl`/`wget`/`python`:
+
+| Mode | Expected |
+|---|---|
+| normal | payload written, no `.part` left |
+| HTTP 404 | `wget` takes over |
+| timeout, partial body | partial rejected, `wget` used |
+| curl + wget down | `python` fallback writes the file |
+| everything down | exit 1, no `dest`, no `.part` |
+| unwritable destination | clean failure, no crash |
+
+### Trap: the anonymous GitHub API allows 60 requests/hour
+
+`api.github.com` answers **HTTP 403** once the unauthenticated quota is gone, and
+a full install needs more than one request. Two mitigations:
+
+- the support files (plugins, `kuota`, digest) come from
+  `raw.githubusercontent.com`, which has no such quota;
+- `download_url` reuses `OPENCODE_V2_GITHUB_TOKEN` → `GITHUB_TOKEN` → `GH_TOKEN` →
+  `gh auth token` when the URL is an API URL, and prints the quota hint when it
+  fails without a token.
+
+### Progress
+
+`progress` (`0`/`1`, only on a TTY) turns on curl's own percentage for the
+114.5 MiB payload, and each of the eight stages prints a numbered bar
+(`[######------------------]  25%  2/8 Installing the glibc runtime`). The bar is a
+synced copy of `codemux/lib/progress-bar.sh`; edit it there and run
+`bash codemux/tools/sync-progress-bar.sh`.
+
+## 7. Size & disk
+
+- release tarball `opencode-v2-linux-arm64.tar.gz`: 114.5 MiB (120,098,368 B).
+- extracted binary `opencode.real`: 234.3 MiB (245,681,144 B for 2.3.0);
+  `$PREFIX/share/opencode-v2` totals 470 MiB with `opencode.real.bak` present.
+- glibc runtime (`glibc-repo`, `glibc`, `termux-exec-glibc`): 449 MiB.
+- Space requirement: set aside **>= 900 MB** free during the install; ~700 MB
+  once the tarball and the previous `opencode.real.bak` are gone.
 
 If disk is tight, clear old caches first:
 
@@ -241,7 +297,7 @@ pip cache purge
 rm -rf $PREFIX/tmp/*
 ```
 
-## 7. Quick diagnosis
+## 8. Quick diagnosis
 
 ```bash
 opencode-v2 doctor

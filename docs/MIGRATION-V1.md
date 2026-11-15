@@ -103,8 +103,10 @@ return { content: "Saved to MEMORY.md (...)" }
 
 ## Preparation before installing V2
 
-1. Make sure there is enough disk: the V2 binary is ~209 MB plus a temporary
-   tarball of ~115 MB → set aside **>= 400 MB** free.
+1. Make sure there is enough disk: the V2 binary `opencode.real` is 234.3 MiB
+   (245,681,144 B for 2.3.0), the temporary tarball is 114.5 MiB, and the glibc
+   runtime is 449 MiB → set aside **>= 900 MB** free (~700 MB once the tarball
+   and `opencode.real.bak` are removed).
 2. Make sure the glibc runtime is ready (the installer also does this
    automatically):
 
@@ -133,6 +135,12 @@ opencode-v2 --version
 # 3. use it
 opencode-v2
 ```
+
+Each of the eight install stages prints a numbered bar
+(`[######------------------]  25%  2/8 Installing the glibc runtime`), and the
+payload download shows curl's own percentage. The payload is verified against the
+`sha256` published with the release mirror; a download cut by a timeout is
+discarded instead of installed, so a failed run is always safe to repeat.
 
 ## Rollback
 
