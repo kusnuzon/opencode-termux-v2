@@ -327,21 +327,21 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
     ok "Session digest generator: $DIGEST_FILE"
   fi
 
-  # kuota: estimated remaining free-model quota (local databases only, no network)
-  KUOTA_FILE="$DIGEST_DIR/kuota"
-  KUOTA_SRC="$SCRIPT_DIR/plugins/kuota.py"
-  if [ ! -f "$KUOTA_SRC" ]; then
+  # quota: estimated remaining free-model quota (local databases only, no network)
+  QUOTA_FILE="$DIGEST_DIR/quota"
+  QUOTA_SRC="$SCRIPT_DIR/plugins/quota.py"
+  if [ ! -f "$QUOTA_SRC" ]; then
     mkdir -p "$SCRIPT_DIR/plugins"
-    fetch_remote "plugins/kuota.py" "$KUOTA_SRC" "$REF_PIN" \
-      || warn "Failed to download plugins/kuota.py"
+    fetch_remote "plugins/quota.py" "$QUOTA_SRC" "$REF_PIN" \
+      || warn "Failed to download plugins/quota.py"
   fi
-  if [ -f "$KUOTA_SRC" ]; then
-    cp "$KUOTA_SRC" "$KUOTA_FILE"
-    sed -i "1s|^#!.*|#!$PREFIX/bin/python3|" "$KUOTA_FILE"
-    chmod 755 "$KUOTA_FILE"
+  if [ -f "$QUOTA_SRC" ]; then
+    cp "$QUOTA_SRC" "$QUOTA_FILE"
+    sed -i "1s|^#!.*|#!$PREFIX/bin/python3|" "$QUOTA_FILE"
+    chmod 755 "$QUOTA_FILE"
     mkdir -p "$PREFIX/bin"
-    ln -sf "$KUOTA_FILE" "$PREFIX/bin/kuota"
-    ok "Quota estimator: $KUOTA_FILE (command: kuota)"
+    ln -sf "$QUOTA_FILE" "$PREFIX/bin/quota"
+    ok "Quota estimator: $QUOTA_FILE (command: quota)"
   fi
 
   # Template files are ONLY installed when missing — memory that already holds

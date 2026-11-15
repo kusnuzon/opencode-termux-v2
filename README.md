@@ -49,7 +49,7 @@ Done — `opencode-v2` is ready.
    **sha256 verified**; npm registry fallback with sha512
 4. 📂 binary → `$PREFIX/share/opencode-v2/opencode.real` + launcher in `$PREFIX/bin`
 5. 🔌 plugins → `~/.config/opencode/plugins/` (`memory.js`, `session-title.js`,
-   `update-notice.js`) + tools in `~/.config/opencode/bin/` (`session-digest.py`, `kuota`)
+   `update-notice.js`) + tools in `~/.config/opencode/bin/` (`session-digest.py`, `quota`)
 6. ▶️ background service start + smoke test, **automatic rollback** on failure
 
 The eight stages print as numbered bars, and the ~115 MB payload shows curl's own
@@ -98,7 +98,7 @@ Requires `which` (`pkg install which`) — the official installer calls it.
 | `memory/opencode.jsonc` | `instructions`: MEMORY.md + RECENT.md |
 | `plugins/session-digest.py` | builds `RECENT.md` (recent sessions + open items) |
 | `plugins/update-notice.js` | shows a codemux update notice inside the session |
-| `plugins/kuota.py` → `kuota` | estimates the remaining free-model quota |
+| `plugins/quota.py` → `quota` | estimates the remaining free-model quota |
 | `~/.bashrc` hook | refreshes `RECENT.md` on every opencode start |
 
 This repo ships **mechanism only** — nobody's private memory is stored here, and
@@ -198,7 +198,7 @@ doctor.sh           full diagnosis (`opencode-v2 doctor`)
 upgrade.sh          `opencode-v2 upgrade`
 uninstall.sh        remove V2 (`--purge` drops its data too)
 plugins/            memory.js, session-title.js, update-notice.js,
-                    session-digest.py, kuota.py
+                    session-digest.py, quota.py
 memory/             MEMORY.md, AGENTS.md, opencode.jsonc templates
 tests/download.sh   download/failure cases (fake curl, wget, python)
 .github/workflows/  ci.yml (shellcheck + tests), sync-upstream.yml (daily mirror)

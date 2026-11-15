@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/python3
-"""kuota — estimate the remaining free-model quota from the local OpenCode databases.
+"""quota — estimate the remaining free-model quota from the local OpenCode databases.
 
 OpenCode does not expose a usage endpoint for free models (every /usage call is
 404, and direct API calls return 429 FreeUsageLimitError). What *is* local: the
@@ -7,12 +7,12 @@ number of assistant messages, i.e. one request per answer. This script counts
 them per UTC day (the free quota resets at 00:00 UTC = 07:00 WIB) and compares
 that with a daily limit.
 
-    kuota                 today's usage + per model
-    kuota --week          the last 7 days
-    kuota --warn          one line, only when the warning threshold is reached
-    kuota --json          machine-readable
-    kuota --limit 150     different daily limit (env KUOTA_LIMIT)
-    kuota --warn-at 90    warning threshold in percent (env KUOTA_WARN_AT)
+    quota                 today's usage + per model
+    quota --week          the last 7 days
+    quota --warn          one line, only when the warning threshold is reached
+    quota --json          machine-readable
+    quota --limit 150     different daily limit (env QUOTA_LIMIT)
+    quota --warn-at 90    warning threshold in percent (env QUOTA_WARN_AT)
 
 Exit codes: 0 below the limit, 1 at/above the limit, 2 usage error.
 
@@ -139,7 +139,7 @@ def cmd_today(limit, warn_at, as_json):
         )
         return 0 if used < limit else 1
 
-    print("kuota %s · %s (UTC, %s)" % (VERSION, today, reset_hint()))
+    print("quota %s · %s (UTC, %s)" % (VERSION, today, reset_hint()))
     print()
     print("  used       %d / %d   %d%%   %s" % (used, limit, pct, bar(used, limit)))
     print("  remaining  %d" % remaining)
@@ -184,7 +184,7 @@ def cmd_week(limit, days, as_json):
         )
         return 0
 
-    print("kuota %s · last %d days (UTC)" % (VERSION, days))
+    print("quota %s · last %d days (UTC)" % (VERSION, days))
     print()
     for row in series:
         print(
@@ -204,29 +204,29 @@ def cmd_warn(limit, warn_at):
     if pct < warn_at:
         return 0
     mark = "\u26a0" if used < limit else "\u2716"
-    print("%s kuota %d/%d (%d%%) · run: kuota" % (mark, used, limit, pct))
+    print("%s quota %d/%d (%d%%) · run: quota" % (mark, used, limit, pct))
     return 0 if used < limit else 1
 
 
 def usage(stream=sys.stdout):
     stream.write(
-        "kuota %s — estimated free-model quota from the local databases\n\n"
-        "usage: kuota [--week [--days N]] [--warn] [--json]\n"
+        "quota %s — estimated free-model quota from the local databases\n\n"
+        "usage: quota [--week [--days N]] [--warn] [--json]\n"
         "             [--limit N] [--warn-at PERCENT]\n\n"
         "  (no option)   today's usage + breakdown per model\n"
         "  --week        the last 7 days (--days N for another window)\n"
         "  --warn        one line, only when the warning threshold is reached\n"
         "  --json        machine-readable output\n"
-        "  --limit N     daily request limit (default 200, env KUOTA_LIMIT)\n"
-        "  --warn-at N   warning threshold in percent (default 80, env KUOTA_WARN_AT)\n\n"
+        "  --limit N     daily request limit (default 200, env QUOTA_LIMIT)\n"
+        "  --warn-at N   warning threshold in percent (default 80, env QUOTA_WARN_AT)\n\n"
         "One assistant message = one request. The free quota resets at 00:00 UTC\n"
         "(07:00 WIB), so days are counted in UTC.\n" % VERSION
     )
 
 
 def main(argv):
-    limit = env_int("KUOTA_LIMIT", DEFAULT_LIMIT)
-    warn_at = env_int("KUOTA_WARN_AT", DEFAULT_WARN_AT)
+    limit = env_int("QUOTA_LIMIT", DEFAULT_LIMIT)
+    warn_at = env_int("QUOTA_WARN_AT", DEFAULT_WARN_AT)
     days = 7
     mode = "today"
     as_json = False
@@ -253,22 +253,22 @@ def main(argv):
             i += 1
             warn_at = int(argv[i]) if i < len(argv) else DEFAULT_WARN_AT
         elif arg in ("-v", "--version"):
-            print("kuota %s" % VERSION)
+            print("quota %s" % VERSION)
             return 0
         else:
-            sys.stderr.write("kuota: unknown option %s\n" % arg)
+            sys.stderr.write("quota: unknown option %s\n" % arg)
             usage(sys.stderr)
             return 2
         i += 1
 
     if limit <= 0:
-        sys.stderr.write("kuota: --limit must be greater than 0\n")
+        sys.stderr.write("quota: --limit must be greater than 0\n")
         return 2
     if not 1 <= warn_at <= 100:
-        sys.stderr.write("kuota: --warn-at must be between 1 and 100\n")
+        sys.stderr.write("quota: --warn-at must be between 1 and 100\n")
         return 2
     if days <= 0:
-        sys.stderr.write("kuota: --days must be greater than 0\n")
+        sys.stderr.write("quota: --days must be greater than 0\n")
         return 2
 
     try:
@@ -278,7 +278,7 @@ def main(argv):
             return cmd_warn(limit, warn_at)
         return cmd_today(limit, warn_at, as_json)
     except sqlite3.Error as exc:
-        sys.stderr.write("kuota: database error: %s\n" % exc)
+        sys.stderr.write("quota: database error: %s\n" % exc)
         return 2
 
 

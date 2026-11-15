@@ -266,7 +266,7 @@ fallback run.
 `api.github.com` answers **HTTP 403** once the unauthenticated quota is gone, and
 a full install needs more than one request. Two mitigations:
 
-- the support files (plugins, `kuota`, digest) come from
+- the support files (plugins, `quota`, digest) come from
   `raw.githubusercontent.com`, which has no such quota;
 - `download_url` reuses `OPENCODE_V2_GITHUB_TOKEN` → `GITHUB_TOKEN` → `GH_TOKEN` →
   `gh auth token` when the URL is an API URL, and prints the quota hint when it
