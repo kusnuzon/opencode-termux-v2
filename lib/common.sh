@@ -119,8 +119,10 @@ heal_curl() {
 }
 
 # download_url <url> <dest> [accept] — curl → wget → python.
+# A partial file must never be treated as success: curl can exit on --max-time
+# after writing part of a large payload, so check the exit status too.
 download_url() {
-  local url="$1" dest="$2" accept="${3:-}" part="$2.part" tok=""
+  local url="$1" dest="$2" accept="${3:-}" part="$2.part" tok="" max_time="${OPENCODE_V2_DOWNLOAD_TIMEOUT:-900}"
   local -a hdr=() whdr=()
   if oc_api_url "$url"; then
     tok="$(oc_gh_token)"
@@ -130,8 +132,11 @@ download_url() {
   mkdir -p "$(dirname "$dest")" || return 1
   rm -f "$part"
   if have curl; then
-    curl -fsSL --max-time 300 "${hdr[@]+"${hdr[@]}"}" "$url" -o "$part" 2>/dev/null
-    if [ -s "$part" ]; then mv -f "$part" "$dest"; return 0; fi
+    if curl -fsSL --max-time "$max_time" "${hdr[@]+"${hdr[@]}"}" "$url" -o "$part" 2>/dev/null \
+      && [ -s "$part" ]; then
+      mv -f "$part" "$dest"
+      return 0
+    fi
     rm -f "$part"
   fi
   [ -n "$tok" ] && whdr+=("--header=Authorization: Bearer $tok")
@@ -362,38 +367,50 @@ extract_payload_binary() {
 
 # download_payload_from_mirror <version> <dest-binary>
 # Returns 1 (without dying) when the mirror is unavailable or invalid so the
-# caller can fall back to the npm registry.
+# caller can fall back to the npm registry. A fresh CDN edge or a partially
+# downloaded file can fail the checksum once, so retry a single time.
 download_payload_from_mirror() {
   local version="$1" dest="$2"
-  local tmp url sha_url expected actual
-  tmp="$(mktemp -d "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/opencode-v2-mirror.XXXXXX")"
+  local tmp url sha_url expected actual attempt
   url="${MIRROR_BASE}/${MIRROR_TAG_PREFIX}${version}/${MIRROR_ASSET}"
   sha_url="${url}.sha256"
 
   step "Downloading OpenCode V2 ${version} from the GitHub mirror (~115 MB)"
-  if ! download_url "$url" "$tmp/$MIRROR_ASSET"; then
-    rm -rf "$tmp"
-    return 1
-  fi
-  if download_url "$sha_url" "$tmp/$MIRROR_ASSET.sha256"; then
-    expected="$(awk '{print $1; exit}' "$tmp/$MIRROR_ASSET.sha256" 2>/dev/null)"
-    actual="$(sha256sum "$tmp/$MIRROR_ASSET" | cut -d' ' -f1)"
-    if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
-      warn "mirror sha256 checksum mismatch — ignoring the GitHub mirror"
+  for attempt in 1 2; do
+    tmp="$(mktemp -d "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/opencode-v2-mirror.XXXXXX")"
+    if ! download_url "$url" "$tmp/$MIRROR_ASSET"; then
       rm -rf "$tmp"
-      return 1
+      [ "$attempt" -eq 1 ] || return 1
+      warn "mirror download failed — retrying once"
+      sleep 2
+      continue
     fi
-    ok "sha256 checksum verified"
-  else
-    warn "mirror checksum missing, skipping verification"
-  fi
+    if download_url "$sha_url" "$tmp/$MIRROR_ASSET.sha256"; then
+      expected="$(awk '{print $1; exit}' "$tmp/$MIRROR_ASSET.sha256" 2>/dev/null)"
+      actual="$(sha256sum "$tmp/$MIRROR_ASSET" | cut -d' ' -f1)"
+      if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+        rm -rf "$tmp"
+        [ "$attempt" -eq 1 ] || {
+          warn "mirror sha256 checksum mismatch — ignoring the GitHub mirror"
+          return 1
+        }
+        warn "mirror sha256 checksum mismatch — retrying once"
+        sleep 2
+        continue
+      fi
+      ok "sha256 checksum verified"
+    else
+      warn "mirror checksum missing, skipping verification"
+    fi
 
-  tar -xzf "$tmp/$MIRROR_ASSET" -C "$tmp" ||
-    { rm -rf "$tmp"; return 1; }
-  extract_payload_binary "$tmp" "$dest" ||
-    { rm -rf "$tmp"; return 1; }
-  rm -rf "$tmp"
-  return 0
+    tar -xzf "$tmp/$MIRROR_ASSET" -C "$tmp" ||
+      { rm -rf "$tmp"; return 1; }
+    extract_payload_binary "$tmp" "$dest" ||
+      { rm -rf "$tmp"; return 1; }
+    rm -rf "$tmp"
+    return 0
+  done
+  return 1
 }
 
 # download_payload <version> <dest-binary>
