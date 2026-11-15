@@ -15,6 +15,7 @@ glibc loader, background service, and memory handled for you.
 - 🧠 cross-session memory — `MEMORY.md` + `RECENT.md`, loaded every session
 - 🏷️ session titles without calling a model (no free-tier errors)
 - 🔄 the built-in updater works — `/update` inside the TUI really updates
+- 📊 a bar for every install stage (`[######------] 25%  2/8 Installing the glibc runtime`)
 - 🩺 `opencode-v2 doctor` — service, plugins, disk, version in one screen
 - 🧷 fully isolated from OpenCode V1 (own DB, state, cache, logs)
 
@@ -51,7 +52,8 @@ Done — `opencode-v2` is ready.
    `update-notice.js`) + tools in `~/.config/opencode/bin/` (`session-digest.py`, `kuota`)
 6. ▶️ background service start + smoke test, **automatic rollback** on failure
 
-Options: `--no-memory`, `--no-plugin`, `--check`.
+The eight stages print as numbered bars, and the ~115 MB payload shows curl's own
+percentage. Options: `--no-memory`, `--no-plugin`, `--check`.
 
 ## ⌨️ Everyday commands
 
@@ -129,6 +131,30 @@ never spawns a child.
 Config (`~/.config/opencode`), skills (`~/.agents/skills`) and plugins are
 **shared**, so providers, models and memory stay the same in both.
 
+## 🧪 Tests
+
+`tests/download.sh` checks `download_url` with fake `curl`/`wget`/`python` in a
+sandbox `PATH`, so none of it touches the system or the network:
+
+```bash
+bash tests/download.sh
+```
+
+| Case | Expected |
+|---|---|
+| clean download | payload written, no `.part` left |
+| HTTP 404 from curl | wget fallback takes over |
+| curl timeout (partial body) | partial file rejected: never installed |
+| curl + wget fail | python fallback writes the file |
+| everything fails | exit 1, no `dest`, no `.part` |
+| unwritable destination | clean failure, no crash |
+| `api.github.com` URL without a token | exit 1 + the 60/hour quota hint |
+
+CI (`.github/workflows/ci.yml`) runs this plus `shellcheck` and `bash -n` on every
+push and pull request. The ASCII progress bar is a synced copy of
+`codemux/lib/progress-bar.sh` — edit it there and run
+`bash codemux/tools/sync-progress-bar.sh`, or CI reports drift.
+
 ## 🩺 Troubleshooting
 
 ```bash
@@ -161,6 +187,24 @@ opencode-v2 uninstall      # already installed
 
 `--purge` also removes V2 data, sessions and logs. V1 is untouched. To manage
 both versions from one command, use [codemux](https://github.com/kusnuzon/codemux).
+
+## 📁 Repository layout
+
+```
+install.sh          deps → glibc → payload → launcher → plugins → config → service
+opencode-v2-launcher  runs the glibc payload through the Termux loader
+lib/common.sh       shared helpers (download_url, checksums, progress bar)
+doctor.sh           full diagnosis (`opencode-v2 doctor`)
+upgrade.sh          `opencode-v2 upgrade`
+uninstall.sh        remove V2 (`--purge` drops its data too)
+plugins/            memory.js, session-title.js, update-notice.js,
+                    session-digest.py, kuota.py
+memory/             MEMORY.md, AGENTS.md, opencode.jsonc templates
+tests/download.sh   download/failure cases (fake curl, wget, python)
+.github/workflows/  ci.yml (shellcheck + tests), sync-upstream.yml (daily mirror)
+docs/               TERMUX.md, MIGRATION-V1.md
+VERSION             mirrored OpenCode version (updated by Actions)
+```
 
 ## 📜 License
 
