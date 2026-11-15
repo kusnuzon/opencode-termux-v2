@@ -297,7 +297,7 @@ ensure_updater_link() {
   ln -sfn "$LOADER" "$UPDATER_BIN"
 }
 
-BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh ncdu htop which"
+BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh ncdu htop which tmux"
 # Optional/large: needs x11-repo; failure is only a warning.
 EXTRA_PKGS="tesseract chromium"
 
