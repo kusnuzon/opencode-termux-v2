@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # tests/download.sh — exercise download_url() without touching the system.
 #
 # download_url is the only place that can silently ship a corrupt payload, so
