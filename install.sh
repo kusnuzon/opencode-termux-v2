@@ -201,15 +201,18 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 
+progress_step_line 1 8 "Preparing dependencies"
 ensure_tools
 
 if [ -n "$CURRENT" ] && [ "$CURRENT" != "unknown" ] && [ "$CURRENT" = "$TARGET" ] && [ -x "$REAL" ] && [ "$UPGRADE" -eq 0 ]; then
   ok "Version $TARGET is already installed"
 else
   # --- glibc runtime --------------------------------------------------------
+  progress_step_line 2 8 "Installing the glibc runtime"
   ensure_glibc
 
   # --- download the payload -------------------------------------------------
+  progress_step_line 3 8 "Downloading the OpenCode V2 payload"
   BACKUP=""
   if [ -x "$REAL" ]; then
     BACKUP="$ROOT/opencode.real.bak"
@@ -222,6 +225,7 @@ else
 fi
 
 # --- launcher ---------------------------------------------------------------
+progress_step_line 4 8 "Installing the launcher"
 mkdir -p "$PREFIX/bin" "$ROOT"
 LAUNCHER_SRC="$SCRIPT_DIR/opencode-v2-launcher"
 if [ ! -f "$LAUNCHER_SRC" ]; then
@@ -241,6 +245,7 @@ ensure_updater_link
 ok "Built-in updater links to the glibc loader: $UPDATER_BIN"
 
 # --- support scripts into $ROOT --------------------------------------------
+progress_step_line 5 8 "Installing support scripts"
 mkdir -p "$ROOT/lib"
 for aux in lib/common.sh doctor.sh upgrade.sh uninstall.sh; do
   src="$SCRIPT_DIR/$aux"
@@ -267,6 +272,7 @@ else
 fi
 
 # --- bundled plugins (memory_save + session titles + update notice) ---------
+progress_step_line 6 8 "Installing plugins"
 PLUGIN_DIR="$HOME/.config/opencode/plugins"
 install_plugin() {
   local name="$1"
@@ -400,12 +406,14 @@ EOS
 fi
 
 # --- V2 configuration (separate from V1) -----------------------------------
+progress_step_line 7 8 "Writing the V2 configuration"
 mkdir -p "$V2HOME" "$XDG_DATA_DIR" "$XDG_STATE_DIR" "$XDG_CACHE_DIR" "$LOG_DIR"
 write_state
 info "V2 data (separate from V1) : $XDG_DATA_DIR"
 info "V2 state/log               : $XDG_STATE_DIR / $LOG_DIR"
 
 # --- smoke test -------------------------------------------------------------
+progress_step_line 8 8 "Starting the service and running the smoke test"
 step "Smoke test: starting the background service"
 if ! daemon_start; then
   err "Smoke test failed. See the log: $SERVER_LOG"

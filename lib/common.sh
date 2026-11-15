@@ -48,6 +48,41 @@ err()  { printf '%s✖%s %s\n' "$C_RED" "$C_OFF" "$*" >&2; }
 step() { printf '%s→%s %s\n' "$C_BLU" "$C_OFF" "$*"; }
 dim()  { printf '%s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
 
+# --- progress-bar begin (synced from codemux/lib/progress-bar.sh) ---
+# progress_bar <percent> [width] [label] — plain ASCII bar + percentage.
+# Out-of-range and non-numeric input is clamped, never an error: the callers
+# use it inside command substitution, where an error would print garbage.
+progress_bar() {
+  local pct="${1:-0}" width="${2:-24}" label="${3:-}"
+  local filled blank bar dash
+  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+  [ "$pct" -lt 0 ] && pct=0
+  [ "$pct" -gt 100 ] && pct=100
+  [ "$width" -gt 0 ] 2>/dev/null || width=24
+  filled=$((pct * width / 100))
+  blank=$((width - filled))
+  printf -v bar '%*s' "$filled" ''
+  printf -v dash '%*s' "$blank" ''
+  bar="${bar// /#}"
+  dash="${dash// /-}"
+  printf '[%s%s] %3d%%' "$bar" "$dash" "$pct"
+  [ -n "$label" ] && printf '  %s' "$label"
+  return 0
+}
+
+# progress_step <current> <total> <label> — a numbered bar line.
+progress_step() {
+  progress_bar "$((10#${1:-0} * 100 / 10#${2:-1}))" 24 "${1:-0}/${2:-0} ${3:-}"
+}
+# --- progress-bar end ---
+
+# progress_step_line — progress_step with a newline, so a caller can print the
+# bar without adding its own printf (the installer prints one line per stage).
+progress_step_line() {
+  progress_step "$@"
+  printf '\n'
+}
+
 die() { err "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -118,11 +153,12 @@ heal_curl() {
   curl_ok
 }
 
-# download_url <url> <dest> [accept] — curl → wget → python.
-# A partial file must never be treated as success: curl can exit on --max-time
-# after writing part of a large payload, so check the exit status too.
+# download_url <url> <dest> [accept] [progress] — curl → wget → python.
+# progress=1 shows curl's bar + percentage on a terminal (used for the big
+# payload). A partial file must never be treated as success: curl can exit on
+# --max-time after writing part of a large payload, so check the exit status.
 download_url() {
-  local url="$1" dest="$2" accept="${3:-}" part="$2.part" tok="" max_time="${OPENCODE_V2_DOWNLOAD_TIMEOUT:-900}"
+  local url="$1" dest="$2" accept="${3:-}" progress="${4:-0}" part="$2.part" tok="" rc=0 max_time="${OPENCODE_V2_DOWNLOAD_TIMEOUT:-900}"
   local -a hdr=() whdr=()
   if oc_api_url "$url"; then
     tok="$(oc_gh_token)"
@@ -132,8 +168,16 @@ download_url() {
   mkdir -p "$(dirname "$dest")" || return 1
   rm -f "$part"
   if have curl; then
-    if curl -fsSL --max-time "$max_time" "${hdr[@]+"${hdr[@]}"}" "$url" -o "$part" 2>/dev/null \
-      && [ -s "$part" ]; then
+    if [ "$progress" = "1" ] && [ -t 2 ]; then
+      curl -fL --progress-bar --max-time "$max_time" "${hdr[@]+"${hdr[@]}"}" \
+        "$url" -o "$part"
+      rc=$?
+    else
+      curl -fsSL --max-time "$max_time" "${hdr[@]+"${hdr[@]}"}" \
+        "$url" -o "$part" 2>/dev/null
+      rc=$?
+    fi
+    if [ "$rc" -eq 0 ] && [ -s "$part" ]; then
       mv -f "$part" "$dest"
       return 0
     fi
@@ -378,7 +422,7 @@ download_payload_from_mirror() {
   step "Downloading OpenCode V2 ${version} from the GitHub mirror (~115 MB)"
   for attempt in 1 2; do
     tmp="$(mktemp -d "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/opencode-v2-mirror.XXXXXX")"
-    if ! download_url "$url" "$tmp/$MIRROR_ASSET"; then
+    if ! download_url "$url" "$tmp/$MIRROR_ASSET" "" 1; then
       rm -rf "$tmp"
       [ "$attempt" -eq 1 ] || return 1
       warn "mirror download failed — retrying once"
@@ -428,7 +472,7 @@ download_payload() {
   url="https://registry.npmjs.org/${pkg}/-/${tarball}"
 
   step "Downloading OpenCode V2 ${version} from the npm registry (~115 MB)"
-  download_url "$url" "$tmp/$tarball" \
+  download_url "$url" "$tmp/$tarball" "" 1 \
     || { rm -rf "$tmp"; die "Failed to download $url"; }
 
   integrity=$(download_url "https://registry.npmjs.org/${pkg}/${version}" "$tmp/meta.json" &&

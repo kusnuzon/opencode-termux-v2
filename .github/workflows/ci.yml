@@ -1,0 +1,31 @@
+name: ci
+
+# The installer only breaks in ways a dry run cannot see: a curl that exits 28
+# after writing half a payload, a fallback that silently gives up, a bash
+# syntax error inside a heredoc. This job pins those.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      - name: shellcheck
+        run: shellcheck -S warning install.sh uninstall.sh upgrade.sh doctor.sh lib/*.sh tests/*.sh
+
+      - name: syntax
+        run: |
+          for f in install.sh uninstall.sh upgrade.sh doctor.sh lib/*.sh tests/*.sh; do
+            bash -n "$f"
+          done
+
+      - name: download fallbacks
+        run: bash tests/download.sh
