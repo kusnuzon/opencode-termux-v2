@@ -341,6 +341,8 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
     chmod 755 "$QUOTA_FILE"
     mkdir -p "$PREFIX/bin"
     ln -sf "$QUOTA_FILE" "$PREFIX/bin/quota"
+    # Older releases shipped this as `kuota`; drop the stale symlink.
+    if [ -L "$PREFIX/bin/kuota" ]; then rm -f "$PREFIX/bin/kuota"; fi
     ok "Quota estimator: $QUOTA_FILE (command: quota)"
   fi
 
