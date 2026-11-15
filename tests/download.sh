@@ -112,6 +112,7 @@ eval "$(sed -n '/^have()/,/^}/p' "$ROOT/lib/common.sh")"
 eval "$(sed -n '/^oc_api_url()/,/^}/p' "$ROOT/lib/common.sh")"
 eval "$(sed -n '/^warn()/,/^}/p' "$ROOT/lib/common.sh")"
 # warn() uses the palette, which lib/common.sh sets near the top.
+# shellcheck disable=SC2034  # read by the copied warn(), not by this file
 C_YLW=""; C_RED=""; C_OFF=""; C_BLU=""; C_DIM=""
 eval "$(sed -n '/^oc_gh_token()/,/^}/p' "$ROOT/lib/common.sh")"
 if ! declare -f download_url >/dev/null; then
@@ -214,7 +215,7 @@ chmod 700 "$SANDBOX/ro"
 # Run in a subshell, not as an env-prefixed if: bash does not guarantee that
 # `if X=1 cmd` returns a status, so the branch would silently not run at all.
 mode PY_OFF
-( GITHUB_TOKEN= GH_TOKEN= OPENCODE_V2_GITHUB_TOKEN= \
+( GITHUB_TOKEN='' GH_TOKEN='' OPENCODE_V2_GITHUB_TOKEN='' \
   PATH="$SANDBOX/bin:/usr/bin:/bin" \
   download_url "https://api.github.com/repos/o/r/contents/x" "$SANDBOX/out/api.bin" 2>"$SANDBOX/api.err" ) \
   && rc7=0 || rc7=$?
