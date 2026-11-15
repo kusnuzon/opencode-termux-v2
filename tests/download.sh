@@ -111,9 +111,10 @@ eval "$(sed -n '/^download_url()/,/^}/p' "$ROOT/lib/common.sh")"
 eval "$(sed -n '/^have()/,/^}/p' "$ROOT/lib/common.sh")"
 eval "$(sed -n '/^oc_api_url()/,/^}/p' "$ROOT/lib/common.sh")"
 eval "$(sed -n '/^warn()/,/^}/p' "$ROOT/lib/common.sh")"
-# warn() uses the palette, which lib/common.sh sets near the top.
-# shellcheck disable=SC2034  # read by the copied warn(), not by this file
-C_YLW=""; C_RED=""; C_OFF=""; C_BLU=""; C_DIM=""
+# warn() uses the palette, which lib/common.sh sets near the top. Predeclare
+# them for shellcheck: they are read by the copied warn(), not by this file.
+# shellcheck disable=SC2034
+{ C_YLW=""; C_RED=""; C_OFF=""; C_BLU=""; C_DIM=""; }
 eval "$(sed -n '/^oc_gh_token()/,/^}/p' "$ROOT/lib/common.sh")"
 if ! declare -f download_url >/dev/null; then
   printf 'FAIL cannot load download_url from lib/common.sh\n'
