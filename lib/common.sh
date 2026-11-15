@@ -8,6 +8,11 @@ REPO_SLUG="kusnuzon/opencode-termux-v2"
 DEFAULT_REF="main"
 # shellcheck disable=SC2034  # used by install.sh
 RAW_BASE="https://raw.githubusercontent.com/${REPO_SLUG}"
+# Payload mirror, same mechanism as the V1 repo: every release attaches the
+# binary tarball + sha256 so installs do not depend on the npm registry.
+MIRROR_TAG_PREFIX="opencode-termux-v2-"
+MIRROR_ASSET="opencode-v2-linux-arm64.tar.gz"
+MIRROR_BASE="${OPENCODE_V2_MIRROR_BASE:-https://github.com/${REPO_SLUG}/releases/download}"
 
 # --- paths -------------------------------------------------------------------
 : "${PREFIX:=/data/data/com.termux/files/usr}"
@@ -280,8 +285,31 @@ latest_metadata() {
   curl -fsSL --max-time 30 https://opencode.ai/update/api/latest/cli/npm
 }
 
+# Latest version published as a mirror release in this repo (GitHub only).
+# Used when the official version server is unreachable on a mobile network.
+mirror_latest_version() {
+  local tag=""
+  if have gh; then
+    tag="$(gh api "repos/${REPO_SLUG}/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+  fi
+  if [ -z "$tag" ]; then
+    tag="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+      "https://github.com/${REPO_SLUG}/releases/latest" 2>/dev/null | sed 's|.*/tag/||')"
+  fi
+  case "$tag" in
+    "${MIRROR_TAG_PREFIX}"*) printf '%s' "${tag#"${MIRROR_TAG_PREFIX}"}" ;;
+    *) return 1 ;;
+  esac
+}
+
 latest_version() {
-  latest_metadata | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1
+  local v
+  v="$(latest_metadata 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)"
+  if [ -n "$v" ]; then
+    printf '%s' "$v"
+    return 0
+  fi
+  mirror_latest_version
 }
 
 installed_version() {
@@ -289,9 +317,10 @@ installed_version() {
 }
 
 # --- download & verify the payload -----------------------------------------
-# The tarball comes straight from the npm registry (not through npm install,
-# because Node on Termux reports process.platform=android, so no android/arm64
-# package exists). The sha512 checksum comes from the registry metadata.
+# Preferred source: the GitHub release mirror, exactly like the V1 repo. It is
+# reachable on networks where the npm registry is slow or blocked. The npm
+# registry stays as a fallback because Node on Termux reports
+# process.platform=android, so `npm install` itself cannot be used.
 package_name_for() {
   local version="$1" scope="@opencode"
   local code
@@ -311,17 +340,77 @@ base64_to_hex() {
   printf '%s' "$1" | base64 -d 2>/dev/null | od -An -tx1 | tr -d ' \n'
 }
 
+# extract_payload_binary <dir> <dest-binary>
+# Accepts the mirror tarball (opencode at the top level), a repacked backup
+# (opencode.real), or the npm tarball (package/bin/opencode).
+extract_payload_binary() {
+  local dir="$1" dest="$2" bin=""
+  if [ -f "$dir/opencode" ]; then
+    bin="$dir/opencode"
+  elif [ -f "$dir/opencode.real" ]; then
+    bin="$dir/opencode.real"
+  elif [ -f "$dir/package/bin/opencode" ]; then
+    bin="$dir/package/bin/opencode"
+  else
+    bin="$(find "$dir" -type f \( -name opencode -o -name opencode.real \) 2>/dev/null | head -1)"
+  fi
+  [ -n "$bin" ] || return 1
+  mkdir -p "$(dirname "$dest")"
+  cp "$bin" "$dest"
+  chmod 755 "$dest"
+}
+
+# download_payload_from_mirror <version> <dest-binary>
+# Returns 1 (without dying) when the mirror is unavailable or invalid so the
+# caller can fall back to the npm registry.
+download_payload_from_mirror() {
+  local version="$1" dest="$2"
+  local tmp url sha_url expected actual
+  tmp="$(mktemp -d "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/opencode-v2-mirror.XXXXXX")"
+  url="${MIRROR_BASE}/${MIRROR_TAG_PREFIX}${version}/${MIRROR_ASSET}"
+  sha_url="${url}.sha256"
+
+  step "Downloading OpenCode V2 ${version} from the GitHub mirror (~115 MB)"
+  if ! download_url "$url" "$tmp/$MIRROR_ASSET"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  if download_url "$sha_url" "$tmp/$MIRROR_ASSET.sha256"; then
+    expected="$(awk '{print $1; exit}' "$tmp/$MIRROR_ASSET.sha256" 2>/dev/null)"
+    actual="$(sha256sum "$tmp/$MIRROR_ASSET" | cut -d' ' -f1)"
+    if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+      warn "mirror sha256 checksum mismatch — ignoring the GitHub mirror"
+      rm -rf "$tmp"
+      return 1
+    fi
+    ok "sha256 checksum verified"
+  else
+    warn "mirror checksum missing, skipping verification"
+  fi
+
+  tar -xzf "$tmp/$MIRROR_ASSET" -C "$tmp" ||
+    { rm -rf "$tmp"; return 1; }
+  extract_payload_binary "$tmp" "$dest" ||
+    { rm -rf "$tmp"; return 1; }
+  rm -rf "$tmp"
+  return 0
+}
+
 # download_payload <version> <dest-binary>
-# Downloads the official tarball, verifies the sha512, then extracts the binary.
+# Tries the GitHub mirror first, then the npm registry (sha512 verified).
 download_payload() {
   local version="$1" dest="$2"
   local tmp pkg tarball url integrity expected actual
+  if download_payload_from_mirror "$version" "$dest"; then
+    return 0
+  fi
+  warn "GitHub mirror unavailable for ${version} — falling back to the npm registry"
   tmp="$(mktemp -d "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/opencode-v2-dl.XXXXXX")"
   pkg="$(package_name_for "$version")"
   tarball="cli-linux-arm64-${version}.tgz"
   url="https://registry.npmjs.org/${pkg}/-/${tarball}"
 
-  step "Downloading OpenCode V2 ${version} (~100 MB)"
+  step "Downloading OpenCode V2 ${version} from the npm registry (~115 MB)"
   download_url "$url" "$tmp/$tarball" \
     || { rm -rf "$tmp"; die "Failed to download $url"; }
 
@@ -340,10 +429,7 @@ download_payload() {
   fi
 
   tar -xzf "$tmp/$tarball" -C "$tmp" || { rm -rf "$tmp"; die "Failed to extract $tarball"; }
-  [ -f "$tmp/package/bin/opencode" ] || { rm -rf "$tmp"; die "Binary not found inside $tarball"; }
-  mkdir -p "$(dirname "$dest")"
-  cp "$tmp/package/bin/opencode" "$dest"
-  chmod 755 "$dest"
+  extract_payload_binary "$tmp" "$dest" || { rm -rf "$tmp"; die "Binary not found inside $tarball"; }
   rm -rf "$tmp"
 }
 

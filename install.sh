@@ -178,10 +178,10 @@ fi
 # --- determine the target version -------------------------------------------
 TARGET="$VERSION_ARG"
 if [ -z "$TARGET" ]; then
-  step "Fetching the latest version from the official server"
-  META="$(latest_metadata)" || die "Failed to reach the OpenCode version server"
-  TARGET="$(json_field version "$META")"
-  [ -n "$TARGET" ] || die "Cannot read the latest version from the official metadata"
+  step "Resolving the latest version (official server, then the GitHub mirror)"
+  TARGET="$(latest_version)" ||
+    die "Failed to resolve the latest version from the official server or the GitHub mirror"
+  [ -n "$TARGET" ] || die "Cannot read the latest version"
 fi
 info "Target version : $TARGET"
 echo
@@ -190,8 +190,8 @@ if [ "$DRY_RUN" -eq 1 ]; then
   step "Plan (dry-run):"
   info "  1. Ensure the Termux glibc runtime (glibc-repo, glibc, termux-exec-glibc)"
   info "  2. Prepare the library shim (libc.so -> libc.so.6) for the glibc loader"
-  info "  3. Download the official @opencode/cli-linux-arm64 $TARGET payload (~100 MB)"
-  info "  4. Verify the sha512 checksum from the npm registry"
+  info "  3. Download the OpenCode V2 $TARGET payload from the GitHub release mirror (~115 MB)"
+  info "  4. Verify the sha256 checksum (npm registry is the fallback source)"
   info "  5. Install the payload to $ROOT/opencode.real"
   info "  6. Install the launcher to $LAUNCHER (command: opencode-v2)"
   info "  7. Enable the built-in updater (TUI /update) via $UPDATER_BIN"

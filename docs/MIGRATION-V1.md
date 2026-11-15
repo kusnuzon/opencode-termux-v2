@@ -104,7 +104,7 @@ return { content: "Saved to MEMORY.md (...)" }
 ## Preparation before installing V2
 
 1. Make sure there is enough disk: the V2 binary is ~209 MB plus a temporary
-   tarball of ~100 MB → set aside **>= 400 MB** free.
+   tarball of ~115 MB → set aside **>= 400 MB** free.
 2. Make sure the glibc runtime is ready (the installer also does this
    automatically):
 

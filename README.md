@@ -5,7 +5,8 @@ One command gets **OpenCode V2** (the 2.x line of
 glibc loader, background service, and memory handled for you.
 
 > ℹ️ Not affiliated with the official project. Only the official payload
-> (`@opencode/cli-linux-arm64`) is downloaded, with its sha512 verified.
+> (`@opencode/cli-linux-arm64`) is downloaded, from the GitHub release mirror
+> with a sha256 check (npm registry as fallback, sha512 verified).
 
 ## ✨ What you get
 
@@ -43,7 +44,8 @@ Done — `opencode-v2` is ready.
    python git sqlite wget openssh gh ncdu htop which`), optionally
    `tesseract chromium` (`--no-extra` to skip); heals `curl` if glibc broke it
 2. 🧬 glibc runtime (`glibc-repo`, `glibc`, `termux-exec-glibc`)
-3. ⬇️ official `@opencode/cli-linux-arm64` payload (~100 MB), **sha512 verified**
+3. ⬇️ OpenCode V2 payload from the **GitHub release mirror** (~115 MB),
+   **sha256 verified**; npm registry fallback with sha512
 4. 📂 binary → `$PREFIX/share/opencode-v2/opencode.real` + launcher in `$PREFIX/bin`
 5. 🔌 plugins → `~/.config/opencode/plugins/` (`memory.js`, `session-title.js`,
    `update-notice.js`) + tools in `~/.config/opencode/bin/` (`session-digest.py`, `kuota`)

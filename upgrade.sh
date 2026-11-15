@@ -35,9 +35,9 @@ CURRENT="$(installed_version)"
 info "Installed version : $CURRENT"
 
 if [ -z "$TARGET" ]; then
-  step "Looking up the latest version"
-  META="$(latest_metadata)" || die "Failed to reach the version server"
-  TARGET="$(json_field version "$META")"
+  step "Looking up the latest version (official server, then the GitHub mirror)"
+  TARGET="$(latest_version)" ||
+    die "Failed to resolve the latest version from the official server or the GitHub mirror"
   [ -n "$TARGET" ] || die "Cannot read the latest version"
 fi
 info "Latest version    : $TARGET"

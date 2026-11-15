@@ -3,8 +3,10 @@ name: Sync upstream opencode v2
 # Watches the official OpenCode V2 version (package @opencode/cli), bumps the
 # VERSION file and publishes the mirror release for this repo.
 #
-# The payload is NOT attached to the release (~100 MB); install.sh downloads it
-# straight from the npm registry with sha512 verification, so releases stay light.
+# The payload is attached to the release as opencode-v2-linux-arm64.tar.gz plus
+# a .sha256 file, exactly like the V1 repo. install.sh tries that GitHub mirror
+# first, so a slow or blocked npm registry no longer breaks installs. The npm
+# registry remains the fallback source.
 
 on:
   schedule:
@@ -60,6 +62,40 @@ jobs:
           git push
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
+      - id: payload
+        name: Build the mirror payload asset
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          VER: ${{ steps.meta.outputs.ver }}
+        run: |
+          set -euo pipefail
+          ver="$VER"
+          scope="@opencode"
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://registry.npmjs.org/${scope}%2fcli-linux-arm64/${ver}")
+          if [ "$code" = "404" ]; then
+            scope="@opencode-ai"
+          fi
+          meta=$(curl -fsSL --retry 3 \
+            "https://registry.npmjs.org/${scope}%2fcli-linux-arm64/${ver}")
+          tarball=$(printf '%s' "$meta" | jq -r '.dist.tarball')
+          integrity=$(printf '%s' "$meta" | jq -r '.dist.integrity')
+          curl -fL --retry 3 --retry-delay 5 -o payload.tgz "$tarball"
+          expected=$(printf '%s' "${integrity#sha512-}" | base64 -d \
+            | od -An -tx1 | tr -d ' \n')
+          actual=$(sha512sum payload.tgz | cut -d' ' -f1)
+          if [ "$expected" != "$actual" ]; then
+            echo "npm tarball sha512 mismatch" >&2
+            exit 1
+          fi
+          tar -xzf payload.tgz
+          cp package/bin/opencode opencode
+          tar -czf opencode-v2-linux-arm64.tar.gz opencode
+          rm -f opencode payload.tgz
+          sha256sum opencode-v2-linux-arm64.tar.gz \
+            > opencode-v2-linux-arm64.tar.gz.sha256
+          ls -lh opencode-v2-linux-arm64.tar.gz*
+
       - name: Publish the mirror release
         if: steps.bump.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
@@ -69,7 +105,8 @@ jobs:
           body: |
             OpenCode V2 ${{ steps.meta.outputs.ver }} mirror for Termux/Android.
 
-            - Official binary: `@opencode/cli-linux-arm64` from the npm registry (downloaded and sha512-verified by `install.sh`)
+            - Payload: `opencode-v2-linux-arm64.tar.gz` (official `@opencode/cli-linux-arm64`) with a `.sha256` checksum — the same GitHub-release mechanism as the V1 repo
+            - Source order: GitHub mirror first, npm registry as fallback
             - Launcher: `opencode-v2-launcher` (runs the binary through the Termux glibc loader; the background service is started manually because V2's `process.execPath` is the loader path)
             - Built-in updater: the TUI `/update` command works — the injected payload is adopted by the launcher on the next start
 
@@ -83,6 +120,9 @@ jobs:
             opencode-v2 upgrade
             ```
           prerelease: false
+          files: |
+            opencode-v2-linux-arm64.tar.gz
+            opencode-v2-linux-arm64.tar.gz.sha256
 
       - name: Summary
         run: echo "Checked OpenCode V2 ${{ steps.meta.outputs.ver }}."
