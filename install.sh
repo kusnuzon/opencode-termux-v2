@@ -204,6 +204,15 @@ fi
 progress_step_line 1 8 "Preparing dependencies"
 ensure_tools
 
+# Dark tmux theme + the extended keys the pi TUI needs (block synced from
+# codemux/lib/tmux-config.sh). Only the marked region is written and the old
+# ~/.tmux.conf is backed up first.
+if tmuxconf_install "$HOME/.tmux.conf"; then
+  ok "$HOME/.tmux.conf: dark tmux theme"
+else
+  warn "could not write ~/.tmux.conf (theme skipped)"
+fi
+
 if [ -n "$CURRENT" ] && [ "$CURRENT" != "unknown" ] && [ "$CURRENT" = "$TARGET" ] && [ -x "$REAL" ] && [ "$UPGRADE" -eq 0 ]; then
   ok "Version $TARGET is already installed"
 else

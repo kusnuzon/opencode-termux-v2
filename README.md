@@ -51,6 +51,9 @@ Done — `opencode-v2` is ready.
 5. 🔌 plugins → `~/.config/opencode/plugins/` (`memory.js`, `session-title.js`,
    `update-notice.js`) + tools in `~/.config/opencode/bin/` (`session-digest.py`, `quota`)
 6. ▶️ background service start + smoke test, **automatic rollback** on failure
+7. 🎨 `~/.tmux.conf`: a managed block with a dark status bar + `extended-keys on`
+   (`csi-u`, what pi needs). Your own lines outside the markers are kept and the
+   old file is backed up as `~/.tmux.conf.bak-tmuxconf-*`
 
 The eight stages print as numbered bars, and the ~115 MB payload shows curl's own
 percentage. Options: `--no-memory`, `--no-plugin`, `--check`.
