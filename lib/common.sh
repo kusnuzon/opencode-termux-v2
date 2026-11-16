@@ -84,8 +84,10 @@ progress_step() {
 # The strip is one tmux window per tab:
 #   " 0:menu          ✕ │ "  tap the name to switch, tap ✕ to close it
 #   "  keep    │ close   "  the same tab while a close waits for an answer
-# and a single " + " button follows the last tab, so it walks along with the
-# strip instead of sitting far away at the right end of the bar.
+# and a single heavy "╋" button follows the last tab, so it walks along with
+# the strip instead of sitting far away at the right end of the bar. The glyph
+# fills its cell, which makes it twice the size of an ASCII "+" at the same
+# width — a finger target needs size, not extra columns.
 #
 # Clicks are read from #{mouse_status_range}, never from #{mouse_x}: tmux scrolls
 # the window list by itself when the tabs do not fit, so a column count would
@@ -110,10 +112,10 @@ set -g extended-keys-format csi-u
 # Tap a tab on the status bar to switch to it (tmux's own binding).
 set -g mouse on
 
-# Dark status bar on top: tmux 3.8 defaults to green on black. The window list
+# Status bar on top, pure black so an AMOLED screen stays black. The window list
 # stays the plain "index: name" strip — no custom formats to mis-render.
 set -g status-position top
-set -g status-style "bg=#101010,fg=#c0c0c0"
+set -g status-style "bg=#000000,fg=#c0c0c0"
 set -g status-left ""
 set -g window-status-separator ""
 # The menu names each tab, so tmux must not rename it back to the command.
@@ -122,10 +124,10 @@ set -g automatic-rename off
 # One tab = 20 columns, always: a space, the index + a name cut to 12 columns
 # (p15 pads the slot, so a short name never shrinks the target under a finger),
 # then the ✕ button and the separator of that tab.
-set -g window-status-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default], #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}]#[fg=#5f6368]│#[default]}#{?#{==:#{window_index},#{e|-|:#{session_windows},1}},#[range=user|new]#[fg=#8a8f98] + #[default],#[default]}"
-set -g window-status-current-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default],#[fg=#ffffff#,bg=#2a2a2a#,bold] #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}] #[default]}#{?#{==:#{window_index},#{e|-|:#{session_windows},1}},#[range=user|new]#[fg=#8a8f98] + #[default],#[default]}"
+set -g window-status-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default], #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}]#[fg=#5f6368]│#[default]}#{?#{==:#{window_index},#{e|-|:#{session_windows},1}},#[range=user|new]#[fg=#e0e0e0#,bold] ╋ #[default],#[default]}"
+set -g window-status-current-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default],#[fg=#ffffff#,bg=#2a2a2a#,bold] #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}] #[default]}#{?#{==:#{window_index},#{e|-|:#{session_windows},1}},#[range=user|new]#[fg=#e0e0e0#,bold] ╋ #[default],#[default]}"
 set -g window-status-current-style "default"
-# The " + " button lives on the last tab (see the formats above), so the right
+# The "╋" button lives on the last tab (see the formats above), so the right
 # end of the bar stays empty.
 set -g status-right ""
 
@@ -133,8 +135,8 @@ bind-key -n MouseDown1Status "run-shell \"sh \$HOME/.config/codemux/tabctl.sh ta
 bind-key -n MouseDown1StatusRight "run-shell \"sh \$HOME/.config/codemux/tabctl.sh new >/dev/null 2>&1; exit 0\""
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
-set -g message-style "bg=#1a1a1a,fg=#e0e0e0"
-set -g message-command-style "bg=#1a1a1a,fg=#e0e0e0"
+set -g message-style "bg=#000000,fg=#e0e0e0"
+set -g message-command-style "bg=#000000,fg=#e0e0e0"
 $TMUXCONF_END
 TMUXCONF
 }
