@@ -96,7 +96,8 @@ set -g extended-keys-format csi-u
 # by the codemux launcher and only exists inside the pi session.
 set -g mouse on
 
-# Dark theme: status bar, tab strip, borders and messages.
+# Dark theme: status bar on top (tab strip + '+ new tab'), borders, messages.
+set -g status-position top
 set -g status-style "bg=#101010,fg=#c0c0c0"
 set -g status-left "#[fg=#8a8f98,bold][#{session_name}] "
 set -g window-status-separator ""
