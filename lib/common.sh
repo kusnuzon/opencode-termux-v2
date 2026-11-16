@@ -111,9 +111,9 @@ set -g @tabstart 0
 # style code are written #{#,} there: without that the tab renders as the
 # literal text "bg=#2a2a2a".
 set -g window-status-style "fg=#8a8f98,bg=#101010"
-set -g window-status-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}}, #[fg=#ff6b6b#,bold]#{p15:#{window_index}:#{window_name}}#[fg=#ff6b6b]✕▕ , #[fg=#5f6368]▏#[fg=#8a8f98]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368]✕▕ },}"
+set -g window-status-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}}, #[fg=#ff6b6b#,bold]#{p16:#{window_index}:#{=12:window_name}} ✕ , #[fg=#8a8f98]#{p16:#{window_index}:#{=12:window_name}} #[fg=#5f6368]✕ },}"
 set -g window-status-current-style "fg=#ffffff,bg=#2a2a2a,bold"
-set -g window-status-current-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}}, #[fg=#ff6b6b#,bg=#2a2a2a#,bold]#{p15:#{window_index}:#{window_name}}#[fg=#ff6b6b#,bg=#2a2a2a]✕▕ , #[fg=#8a8f98]▏#[fg=#ffffff#,bg=#2a2a2a#,bold]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368#,bg=#2a2a2a]✕▕ },}"
+set -g window-status-current-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}}, #[fg=#ff6b6b#,bg=#2a2a2a#,bold]#{p16:#{window_index}:#{=12:window_name}} ✕ , #[fg=#ffffff#,bg=#2a2a2a#,bold]#{p16:#{window_index}:#{=12:window_name}} #[fg=#8a8f98#,bg=#2a2a2a]✕ },}"
 set -g window-status-activity-style "fg=#d0d0d0,bg=#101010"
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
