@@ -41,19 +41,30 @@ Done — `opencode-v2` is ready.
 
 ## 🧰 What the installer does
 
-1. 📦 base dependencies first (`curl tar unzip gzip coreutils ca-certificates jq
-   python git sqlite wget openssh gh ncdu htop which`), optionally
+1. 📦 **Preparing dependencies** (`curl tar unzip gzip coreutils ca-certificates jq
+   python git sqlite wget openssh gh ncdu htop which tmux`), optionally
    `tesseract chromium` (`--no-extra` to skip); heals `curl` if glibc broke it
-2. 🧬 glibc runtime (`glibc-repo`, `glibc`, `termux-exec-glibc`)
-3. ⬇️ OpenCode V2 payload from the **GitHub release mirror** (~115 MB),
-   **sha256 verified**; npm registry fallback with sha512
-4. 📂 binary → `$PREFIX/share/opencode-v2/opencode.real` + launcher in `$PREFIX/bin`
-5. 🔌 plugins → `~/.config/opencode/plugins/` (`memory.js`, `session-title.js`,
-   `update-notice.js`) + tools in `~/.config/opencode/bin/` (`session-digest.py`, `quota`)
-6. ▶️ background service start + smoke test, **automatic rollback** on failure
-7. 🎨 `~/.tmux.conf`: a managed block with a dark status bar + `extended-keys on`
-   (`csi-u`, what pi needs). Your own lines outside the markers are kept and the
-   old file is backed up as `~/.tmux.conf.bak-tmuxconf-*`
+2. 🧬 **Installing the glibc runtime** (`glibc-repo`, `glibc`,
+   `termux-exec-glibc`)
+3. ⬇️ **Downloading the OpenCode V2 payload** from the **GitHub release mirror**
+   (~115 MB), **sha256 verified**; npm registry fallback with sha512
+4. 📂 **Installing the launcher** — payload to
+   `$PREFIX/share/opencode-v2/opencode.real`, launcher in `$PREFIX/bin`, plus the
+   `~/.opencode/bin/opencode` link the built-in updater needs
+5. 🔧 **Installing support scripts** — `doctor.sh`, `upgrade.sh`, `uninstall.sh`,
+   `lib/common.sh` into `$PREFIX/share/opencode-v2`
+6. 🔌 **Installing plugins** — `memory.js`, `session-title.js`,
+   `update-notice.js` into `~/.config/opencode/plugins/`, and the tools
+   `session-digest.py` + `quota` into `~/.config/opencode/bin/`
+7. 🧠 **Writing the V2 configuration** — its own data/state/cache/log paths, the
+   system prompt hook, and the memory templates (only when they are missing)
+8. ▶️ **Starting the service and running the smoke test** — **automatic rollback**
+   on failure
+
+It also writes a managed `~/.tmux.conf` block: a dark status bar (tmux 3.8
+otherwise ships green on black) plus `extended-keys on` in the `csi-u` format,
+which is what the pi TUI needs. Your own lines outside the markers are kept and
+the old file is backed up as `~/.tmux.conf.bak-tmuxconf-*`.
 
 The eight stages print as numbered bars, and the ~115 MB payload shows curl's own
 percentage. Options: `--no-memory`, `--no-plugin`, `--check`.
@@ -154,9 +165,11 @@ bash tests/download.sh
 | `api.github.com` URL without a token | exit 1 + the 60/hour quota hint |
 
 CI (`.github/workflows/ci.yml`) runs this plus `shellcheck` and `bash -n` on every
-push and pull request. The ASCII progress bar is a synced copy of
-`codemux/lib/progress-bar.sh` — edit it there and run
-`bash codemux/tools/sync-progress-bar.sh`, or CI reports drift.
+push and pull request. Two blocks are synced copies of the codemux repo — the
+ASCII progress bar (`codemux/lib/progress-bar.sh`) and the managed tmux config
+(`codemux/lib/tmux-config.sh`). Edit them there and run
+`bash codemux/tools/sync-progress-bar.sh` / `bash codemux/tools/sync-tmux-config.sh`,
+or CI reports drift.
 
 ## 🩺 Troubleshooting
 
