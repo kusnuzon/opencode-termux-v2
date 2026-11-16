@@ -91,30 +91,18 @@ $TMUXCONF_BEGIN
 set -g extended-keys on
 set -g extended-keys-format csi-u
 
-# A finger tap on the status bar is a left click in tmux, so tapping a tab
-# switches to it and swiping the bar scrolls the strip (both bindings live in
-# the codemux launcher and only act inside the pi session).
+# Tap a tab on the status bar to switch to it (tmux's own binding).
 set -g mouse on
 
-# Dark theme: status bar on top, boxed tabs, borders and messages. The tab
-# strip starts at column 0 (status-left is empty) and shows one page of three
-# tabs, each exactly 20 columns wide, which is what lets a tap be mapped to a
-# tab and to its own "x". @tabstart is the first tab of the page (swiping the
-# bar moves it); @closepending marks the tab waiting for a close confirmation
-# and turns it red while the launcher shows the keep/close buttons.
+# Dark status bar on top: tmux 3.8 defaults to green on black. The window list
+# stays the plain "index: name" strip — no custom formats to mis-render.
 set -g status-position top
 set -g status-style "bg=#101010,fg=#c0c0c0"
 set -g status-left ""
 set -g window-status-separator ""
-set -g @tabstart 0
-# Inside a #{?...} branch a comma ends the branch, so the commas of a
-# style code are written #{#,} there: without that the tab renders as the
-# literal text "bg=#2a2a2a".
-set -g window-status-style "fg=#8a8f98,bg=#101010"
-set -g window-status-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}},#[fg=#c0c0c0]  keep    #[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   ,  #[fg=#8a8f98]#{p15:#{window_index}:#{=12:window_name}} ✕#[fg=#5f6368]│}}"
+set -g window-status-format " #I: #W "
 set -g window-status-current-style "fg=#ffffff,bg=#2a2a2a,bold"
-set -g window-status-current-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}},#[fg=#c0c0c0#,bg=#2a2a2a#,bold]  keep    #[fg=#5f6368#,bg=#2a2a2a]│#[fg=#ff6b6b#,bg=#2a2a2a#,bold] close   ,  #[fg=#ffffff#,bg=#2a2a2a#,bold]#{p15:#{window_index}:#{=12:window_name}} ✕ }}"
-set -g window-status-activity-style "fg=#d0d0d0,bg=#101010"
+set -g window-status-current-format " #I: #W "
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
 set -g message-style "bg=#1a1a1a,fg=#e0e0e0"
