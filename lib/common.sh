@@ -92,21 +92,25 @@ set -g extended-keys on
 set -g extended-keys-format csi-u
 
 # A finger tap on the status bar is a left click in tmux, so tapping a tab
-# switches to it. The "+ new tab" button at the right end of the bar is added
-# by the codemux launcher and only exists inside the pi session.
+# switches to it and swiping the bar scrolls the strip (both bindings live in
+# the codemux launcher and only act inside the pi session).
 set -g mouse on
 
 # Dark theme: status bar on top, boxed tabs, borders and messages. The tab
-# strip starts at column 0 (status-left is empty) and every tab is exactly 20
-# columns wide, which is what lets a tap be mapped to a tab and its "x".
+# strip starts at column 0 (status-left is empty) and shows one page of three
+# tabs, each exactly 20 columns wide, which is what lets a tap be mapped to a
+# tab and to its own "x". @tabstart is the first tab of the page (swiping the
+# bar moves it); @closepending marks the tab waiting for a close confirmation
+# and turns it red while the launcher shows the keep/close buttons.
 set -g status-position top
 set -g status-style "bg=#101010,fg=#c0c0c0"
 set -g status-left ""
 set -g window-status-separator ""
+set -g @tabstart 0
 set -g window-status-style "fg=#8a8f98,bg=#101010"
-set -g window-status-format " #[fg=#5f6368]▏#[fg=#8a8f98]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368]✕▕ "
+set -g window-status-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}}, #[fg=#ff6b6b,bold]#{p15:#{window_index}:#{window_name}}#[fg=#ff6b6b]✕▕ , #[fg=#5f6368]▏#[fg=#8a8f98]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368]✕▕ },}"
 set -g window-status-current-style "fg=#ffffff,bg=#2a2a2a,bold"
-set -g window-status-current-format " #[fg=#8a8f98]▏#[fg=#ffffff,bg=#2a2a2a,bold]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368,bg=#2a2a2a]✕▕ "
+set -g window-status-current-format "#{?#{&&:#{>=:#{window_index},#{@tabstart}},#{<:#{window_index},#{e|+|:#{@tabstart},3}}},#{?#{==:#{window_index},#{@closepending}}, #[fg=#ff6b6b,bg=#2a2a2a,bold]#{p15:#{window_index}:#{window_name}}#[fg=#ff6b6b,bg=#2a2a2a]✕▕ , #[fg=#8a8f98]▏#[fg=#ffffff,bg=#2a2a2a,bold]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368,bg=#2a2a2a]✕▕ },}"
 set -g window-status-activity-style "fg=#d0d0d0,bg=#101010"
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
