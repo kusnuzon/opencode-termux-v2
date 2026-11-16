@@ -132,7 +132,6 @@ set -g window-status-current-style "default"
 set -g status-right ""
 
 bind-key -n MouseDown1Status "run-shell \"sh \$HOME/.config/codemux/tabctl.sh tap '#{mouse_status_range}' >/dev/null 2>&1; exit 0\""
-bind-key -n MouseDown1StatusRight "run-shell \"sh \$HOME/.config/codemux/tabctl.sh new >/dev/null 2>&1; exit 0\""
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
 set -g message-style "bg=#000000,fg=#e0e0e0"
