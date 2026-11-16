@@ -96,15 +96,17 @@ set -g extended-keys-format csi-u
 # by the codemux launcher and only exists inside the pi session.
 set -g mouse on
 
-# Dark theme: status bar on top (tab strip + '+ new tab'), borders, messages.
+# Dark theme: status bar on top, boxed tabs, borders and messages. The tab
+# strip starts at column 0 (status-left is empty) and every tab is exactly 20
+# columns wide, which is what lets a tap be mapped to a tab and its "x".
 set -g status-position top
 set -g status-style "bg=#101010,fg=#c0c0c0"
-set -g status-left "#[fg=#8a8f98,bold][#{session_name}] "
+set -g status-left ""
 set -g window-status-separator ""
 set -g window-status-style "fg=#8a8f98,bg=#101010"
-set -g window-status-format " #[fg=#8a8f98]#{p18:#{window_index}:#{window_name}} "
+set -g window-status-format " #[fg=#5f6368]▏#[fg=#8a8f98]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368]✕▕ "
 set -g window-status-current-style "fg=#ffffff,bg=#2a2a2a,bold"
-set -g window-status-current-format " #[fg=#ffffff,bg=#2a2a2a,bold]#{p18:#{window_index}:#{window_name}} "
+set -g window-status-current-format " #[fg=#8a8f98]▏#[fg=#ffffff,bg=#2a2a2a,bold]#{p15:#{window_index}:#{window_name}}#[fg=#5f6368,bg=#2a2a2a]✕▕ "
 set -g window-status-activity-style "fg=#d0d0d0,bg=#101010"
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
