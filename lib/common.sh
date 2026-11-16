@@ -84,7 +84,8 @@ progress_step() {
 # The strip is one tmux window per tab:
 #   " 0:menu          ✕ │ "  tap the name to switch, tap ✕ to close it
 #   "  keep    │ close   "  the same tab while a close waits for an answer
-# and " + new tab " sits at the right end of the bar.
+# and a single " + " button follows the last tab, so it walks along with the
+# strip instead of sitting far away at the right end of the bar.
 #
 # Clicks are read from #{mouse_status_range}, never from #{mouse_x}: tmux scrolls
 # the window list by itself when the tabs do not fit, so a column count would
@@ -121,10 +122,12 @@ set -g automatic-rename off
 # One tab = 20 columns, always: a space, the index + a name cut to 12 columns
 # (p15 pads the slot, so a short name never shrinks the target under a finger),
 # then the ✕ button and the separator of that tab.
-set -g window-status-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default], #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}]#[fg=#5f6368]│#[default]}"
-set -g window-status-current-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default],#[fg=#ffffff#,bg=#2a2a2a#,bold] #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}] #[default]}"
+set -g window-status-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default], #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}]#[fg=#5f6368]│#[default]}#{?#{==:#{window_index},#{e|-|:#{session_windows},1}},#[range=user|new]#[fg=#8a8f98] + #[default],#[default]}"
+set -g window-status-current-format "#{?#{==:#{window_index},#{@closepending}},#[range=user|k#{window_index}]#[fg=#c0c0c0]  keep    #[range=user|x#{window_index}]#[fg=#5f6368]│#[fg=#ff6b6b#,bold] close   #[default],#[fg=#ffffff#,bg=#2a2a2a#,bold] #[range=user|t#{window_index}]#{p15:#{window_index}:#{=12:window_name}}#[range=user|c#{window_index}] ✕ #[range=user|t#{window_index}] #[default]}#{?#{==:#{window_index},#{e|-|:#{session_windows},1}},#[range=user|new]#[fg=#8a8f98] + #[default],#[default]}"
 set -g window-status-current-style "default"
-set -g status-right "#[range=user|new] + new tab #[default]"
+# The " + " button lives on the last tab (see the formats above), so the right
+# end of the bar stays empty.
+set -g status-right ""
 
 bind-key -n MouseDown1Status "run-shell \"sh \$HOME/.config/codemux/tabctl.sh tap '#{mouse_status_range}' >/dev/null 2>&1; exit 0\""
 bind-key -n MouseDown1StatusRight "run-shell \"sh \$HOME/.config/codemux/tabctl.sh new >/dev/null 2>&1; exit 0\""
