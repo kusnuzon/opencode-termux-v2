@@ -77,9 +77,9 @@ progress_step() {
 # --- progress-bar end ---
 
 # --- tmux-config begin (synced from codemux/lib/tmux-config.sh) ---
-# Managed tmux config: dark status bar (tmux 3.8 defaults to green on black)
-# plus the extended keys the pi TUI needs. Everything outside the markers
-# belongs to the user and is never touched.
+# Managed tmux config: dark status bar (tmux 3.8 defaults to green on black),
+# a tab strip you can tap, plus the extended keys the pi TUI needs. Everything
+# outside the markers belongs to the user and is never touched.
 TMUXCONF_BEGIN='# --- codemux:tmux begin (managed; edits inside this block are overwritten) ---'
 TMUXCONF_END='# --- codemux:tmux end ---'
 
@@ -91,11 +91,19 @@ $TMUXCONF_BEGIN
 set -g extended-keys on
 set -g extended-keys-format csi-u
 
-# Dark theme: status bar, window labels, borders and messages.
+# A finger tap on the status bar is a left click in tmux, so tapping a tab
+# switches to it. The "+ new tab" button at the right end of the bar is added
+# by the codemux launcher and only exists inside the pi session.
+set -g mouse on
+
+# Dark theme: status bar, tab strip, borders and messages.
 set -g status-style "bg=#101010,fg=#c0c0c0"
 set -g status-left "#[fg=#8a8f98,bold][#{session_name}] "
+set -g window-status-separator ""
 set -g window-status-style "fg=#8a8f98,bg=#101010"
+set -g window-status-format " #[fg=#8a8f98]#{window_index}:#{window_name} "
 set -g window-status-current-style "fg=#ffffff,bg=#2a2a2a,bold"
+set -g window-status-current-format " #[fg=#ffffff,bg=#2a2a2a,bold]#{window_index}:#{window_name} "
 set -g window-status-activity-style "fg=#d0d0d0,bg=#101010"
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
