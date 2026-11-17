@@ -141,6 +141,11 @@ set -g status-right ""
 bind-key -n MouseDown1Status "run-shell \"sh \$HOME/.config/codemux/tabctl.sh tap '#{mouse_status_range}' >/dev/null 2>&1; exit 0\""
 set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
+# Warm near-black pane background (#11100E): cells pi draws with the default
+# background pick this up, so long reading sessions stay easy on the eyes
+# while explicit backgrounds (selections, tool boxes) keep their own colors.
+set -g window-style "bg=#11100E"
+set -g window-active-style "bg=#11100E"
 set -g message-style "bg=#000000,fg=#e0e0e0"
 set -g message-command-style "bg=#000000,fg=#e0e0e0"
 
