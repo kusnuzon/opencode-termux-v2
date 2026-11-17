@@ -136,6 +136,14 @@ set -g pane-border-style "fg=#2a2a2a"
 set -g pane-active-border-style "fg=#5f6368"
 set -g message-style "bg=#000000,fg=#e0e0e0"
 set -g message-command-style "bg=#000000,fg=#e0e0e0"
+
+# Copy-mode (scrolling back with the wheel) and text selection: tmux's default
+# paints the copy-mode cursor and the selection bright yellow, which sits like
+# a glaring highlight over dim text on a black screen and makes it unreadable.
+# Dark selection with white text keeps every highlighted character readable.
+set -g mode-style "fg=#ffffff,bg=#5f6368"
+set -g copy-mode-match-style "fg=#000000,bg=#8ab4f8"
+set -g copy-mode-current-match-style "fg=#000000,bg=#e0e0e0"
 $TMUXCONF_END
 TMUXCONF
 }
