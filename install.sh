@@ -36,23 +36,34 @@ API_TOKEN="$(gh_token_early)"
 # raw.githubusercontent.com often serves a stale version from network proxy
 # caches; the API is always fresh. If the API fails (rate limit), use raw.
 fetch_remote() {
-  local path="$1" dest="$2" ref="${3:-$DEFAULT_REF}"
+  local path="$1" dest="$2" ref="${3:-$DEFAULT_REF}" part="$2.part"
   local -a hdr=(-H "Accept: application/vnd.github.raw")
   [ -n "$API_TOKEN" ] && hdr+=(-H "Authorization: Bearer $API_TOKEN")
+  # Download to a .part file and only move it into place when the transfer is
+  # complete: a cut connection must never leave a truncated common.sh or plugin
+  # behind that the caller would then install as if it were whole.
+  rm -f "$part"
   if curl -fsSL --max-time 60 "${hdr[@]}" \
     "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" \
-    -o "$dest" 2>/dev/null; then
+    -o "$part" 2>/dev/null && [ -s "$part" ]; then
+    mv -f "$part" "$dest"
     return 0
   fi
-  if curl -fsSL --max-time 60 -o "$dest" "${RAW_BASE}/${ref}/${path}" 2>/dev/null; then
+  rm -f "$part"
+  if curl -fsSL --max-time 60 -o "$part" "${RAW_BASE}/${ref}/${path}" 2>/dev/null && [ -s "$part" ]; then
+    mv -f "$part" "$dest"
     return 0
   fi
+  rm -f "$part"
   # fallback: wget (no header) or python (with the raw header)
-  if command -v wget >/dev/null 2>&1; then
-    wget -q --timeout=60 -O "$dest" "${RAW_BASE}/${ref}/${path}" >/dev/null 2>&1 && return 0
+  if command -v wget >/dev/null 2>&1 &&
+    wget -q --timeout=60 -O "$part" "${RAW_BASE}/${ref}/${path}" >/dev/null 2>&1 && [ -s "$part" ]; then
+    mv -f "$part" "$dest"
+    return 0
   fi
+  rm -f "$part"
   if command -v python >/dev/null 2>&1; then
-    python - "$dest" "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" "$API_TOKEN" <<'PY' >/dev/null 2>&1
+    python - "$part" "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" "$API_TOKEN" <<'PY' >/dev/null 2>&1
 import sys, urllib.request
 dest, url = sys.argv[1], sys.argv[2]
 token = sys.argv[3] if len(sys.argv) > 3 else ""
@@ -62,8 +73,9 @@ if token:
     req.add_header("Authorization", "Bearer " + token)
 open(dest, "wb").write(urllib.request.urlopen(req, timeout=60).read())
 PY
-    [ -s "$dest" ] && return 0
+    [ -s "$part" ] && { mv -f "$part" "$dest"; return 0; }
   fi
+  rm -f "$part"
   return 1
 }
 
@@ -139,7 +151,10 @@ EOF
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --version) VERSION_ARG="${2:-}"; shift 2 ;;
+    --version)
+      VERSION_ARG="${2:-}"
+      [ -n "$VERSION_ARG" ] || { err "--version needs a value, e.g. --version 2.3.0"; usage; exit 1; }
+      shift 2 ;;
     --upgrade) UPGRADE=1; shift ;;
     --check) CHECK_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -147,14 +162,17 @@ while [ $# -gt 0 ]; do
     --no-extra) NO_EXTRA=1; export NO_EXTRA; shift ;;
     --no-memory) WITH_MEMORY=0; shift ;;
     --with-memory) WITH_MEMORY=1; shift ;;
-    --ref) REF_PIN="${2:-}"; shift 2 ;;
+    --ref)
+      REF_PIN="${2:-}"
+      [ -n "$REF_PIN" ] || { err "--ref needs a branch or tag name"; usage; exit 1; }
+      shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1"; usage; exit 1 ;;
   esac
 done
 
 printf '%s\n' "╭──────────────────────────────────────────────╮"
-printf '%s\n' "│  OpenCode V2 installer — Termux / Android       │"
+printf '%s\n' "│  OpenCode V2 installer — Termux / Android    │"
 printf '%s\n' "╰──────────────────────────────────────────────╯"
 
 require_termux
@@ -383,24 +401,37 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
     [ -f "$HOME/.bashrc" ] || : >"$HOME/.bashrc"
     cat >>"$HOME/.bashrc" <<'EOS'
 
-# --- refresh the session digest before opencode starts (install.sh) ---
+# --- refresh the session summary before opencode starts (install.sh) ---
 _oc_refresh_digest() {
   [ -x "$HOME/.config/opencode/bin/session-digest.py" ] || return 0
   python3 "$HOME/.config/opencode/bin/session-digest.py" >/dev/null 2>&1
 }
 # V1 keeps its own database. Drop the V2 XDG_* values so starting V1 from a V2
 # shell cannot point it at the V2 database ("no session table", blank screen).
+# The header must keep the word "summary" (not "digest"): codemux removes this
+# legacy block by that header when it installs its own managed wrapper.
+# The repair always runs (not only on error): a clean TUI exit can still leave
+# the alt-screen up, which looks like a frozen terminal.
 _oc_tty_repair() {
-  [ -t 1 ] || return 0
-  stty sane 2>/dev/null
-  printf '\033[?1049l\033[?25h\033[0m'
+  local t=""
+  if { printf '' >/dev/tty; } 2>/dev/null; then t=/dev/tty
+  elif [ -t 1 ]; then t=/dev/stdout
+  else return 0
+  fi
+  # Close a control sequence a killed TUI left open, then undo XOFF (a stuck
+  # XOFF swallows every following byte, which also looks like a freeze).
+  printf '\007\033\\\033\\\017' >"$t" 2>/dev/null
+  stty sane 2>/dev/null <"$t" || true
+  # alt-screen, mouse, focus, bracketed paste, cursor-key mode, charset, then a
+  # full reset (RIS) as the hammer, and a forced redraw.
+  printf '\033[?1049l\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1004l\033[?2004l\033[?1l\033>\033c\033[!p\033[2J\033[H\033[0m\033[?25h' >"$t" 2>/dev/null
 }
 opencode() {
   _oc_refresh_digest
   local rc=0
   ( unset XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME; command opencode "$@" )
   rc=$?
-  [ "$rc" -ne 0 ] && _oc_tty_repair
+  _oc_tty_repair
   return "$rc"
 }
 opencode-v2() {
@@ -408,7 +439,7 @@ opencode-v2() {
   local rc=0
   command opencode-v2 "$@"
   rc=$?
-  [ "$rc" -ne 0 ] && _oc_tty_repair
+  _oc_tty_repair
   return "$rc"
 }
 EOS

@@ -243,15 +243,24 @@ def main(argv):
             mode = "week"
         elif arg == "--warn":
             mode = "warn"
-        elif arg == "--days":
+        elif arg in ("--days", "--limit", "--warn-at"):
             i += 1
-            days = int(argv[i]) if i < len(argv) else 7
-        elif arg == "--limit":
-            i += 1
-            limit = int(argv[i]) if i < len(argv) else DEFAULT_LIMIT
-        elif arg == "--warn-at":
-            i += 1
-            warn_at = int(argv[i]) if i < len(argv) else DEFAULT_WARN_AT
+            if i >= len(argv):
+                sys.stderr.write("quota: %s expects a number\n" % arg)
+                usage(sys.stderr)
+                return 2
+            try:
+                value = int(argv[i])
+            except ValueError:
+                sys.stderr.write("quota: %s expects a number, got %s\n" % (arg, argv[i]))
+                usage(sys.stderr)
+                return 2
+            if arg == "--days":
+                days = value
+            elif arg == "--limit":
+                limit = value
+            else:
+                warn_at = value
         elif arg in ("-v", "--version"):
             print("quota %s" % VERSION)
             return 0

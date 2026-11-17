@@ -589,7 +589,8 @@ ensure_updater_link() {
   ln -sfn "$LOADER" "$UPDATER_BIN"
 }
 
-BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh ncdu htop which tmux"
+BASE_PKGS="curl tar unzip gzip coreutils ca-certificates jq python git sqlite wget openssh gh ncdu htop which tmux util-linux"
+# util-linux provides setsid, which daemon_start needs to detach the service.
 # Optional/large: needs x11-repo; failure is only a warning.
 EXTRA_PKGS="tesseract chromium"
 

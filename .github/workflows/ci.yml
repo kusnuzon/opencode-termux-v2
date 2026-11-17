@@ -27,5 +27,8 @@ jobs:
             bash -n "$f"
           done
 
+      - name: install static checks
+        run: bash tests/install-static.sh
+
       - name: download fallbacks
         run: bash tests/download.sh
