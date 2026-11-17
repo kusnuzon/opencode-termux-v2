@@ -116,6 +116,12 @@ set -g extended-keys-format csi-u
 # exists in Termux's terminfo and keeps italics real.
 set -g default-terminal "tmux-256color"
 
+# Master wants no italics at all (thinking text read better upright). Map the
+# start/stop-italic capabilities to the harmless "not italic" SGR so tmux still
+# considers them present — clearing them outright would make tmux fall back to
+# reverse video, the exact highlight bug fixed above.
+set -as terminal-overrides "*:sitm=\033[23m,ritm=\033[23m"
+
 # Tap a tab on the status bar to switch to it (tmux's own binding).
 set -g mouse on
 
