@@ -109,6 +109,13 @@ $TMUXCONF_BEGIN
 set -g extended-keys on
 set -g extended-keys-format csi-u
 
+# tmux renders italics as reverse video (light background, dark text) whenever
+# default-terminal starts with "screen" — a legacy GNU screen compatibility hack
+# in tty_set_italics(). pi draws its thinking text in italics, so screen-*
+# turned every thinking block into an unreadable light highlight. tmux-256color
+# exists in Termux's terminfo and keeps italics real.
+set -g default-terminal "tmux-256color"
+
 # Tap a tab on the status bar to switch to it (tmux's own binding).
 set -g mouse on
 
