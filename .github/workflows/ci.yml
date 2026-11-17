@@ -30,5 +30,12 @@ jobs:
       - name: install static checks
         run: bash tests/install-static.sh
 
+      # The shared files (plugins, memory templates) must match the canonical
+      # copies in codemux; a repo edit that was never synced fails here.
+      - name: shared files in sync with codemux
+        run: |
+          git clone --depth 1 https://github.com/kusnuzon/codemux /tmp/codemux-src
+          bash /tmp/codemux-src/tools/sync-opencode-files.sh --check "$GITHUB_WORKSPACE"
+
       - name: download fallbacks
         run: bash tests/download.sh
