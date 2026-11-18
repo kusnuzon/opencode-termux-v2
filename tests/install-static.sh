@@ -88,5 +88,50 @@ grep -qF '"--ref needs a' install.sh &&
   ok "--ref without a value is rejected" ||
   bad "--ref without a value is silently ignored"
 
+# 8. the python download fallbacks must stream to disk, never read a whole
+#    download into RAM (download_url also serves the ~115 MB payload).
+du_common="$(sed -n '/^download_url()/,/^}/p' lib/common.sh)"
+if printf '%s' "$du_common" | grep -q 'shutil.copyfileobj' &&
+   ! printf '%s' "$du_common" | grep -q 'urlopen(req, timeout=60).read()'; then
+  ok "download_url python fallback streams to disk"
+else
+  bad "download_url python fallback reads the whole payload into RAM"
+fi
+fr_install="$(sed -n '/^fetch_remote()/,/^}/p' install.sh)"
+if printf '%s' "$fr_install" | grep -q 'shutil.copyfileobj' &&
+   ! printf '%s' "$fr_install" | grep -q 'urlopen(req, timeout=60).read()'; then
+  ok "fetch_remote python fallback streams to disk"
+else
+  bad "fetch_remote python fallback reads the whole file into RAM"
+fi
+
+# 9. staged sources are checked with -s: a 0-byte leftover from an interrupted
+#    older fetch must never be installed as the real plugin/script/template.
+if [ "$(grep -cF -- '[ ! -f "$src" ]' install.sh)" = "0" ] &&
+   grep -qF -- '[ ! -s "$src" ]' install.sh; then
+  ok "staged sources are size-checked (-s)"
+else
+  bad "a 0-byte staged source can still be installed"
+fi
+
+# 10. install.sh must not make its own payload backup: download_payload writes
+#     to $REAL.new and moves it only after success, and upgrade.sh owns the
+#     rollback copy — the old cp wasted ~115 MB on every install.
+if grep -qF 'cp "$REAL" "$BACKUP"' install.sh; then
+  bad "install.sh still makes a dead ~115 MB backup copy"
+else
+  ok "no dead payload backup in install.sh (upgrade.sh owns rollback)"
+fi
+
+# 11. uninstall.sh must restore the newest memory.js V1 backup, including the
+#     timestamped .v1.<ts>.bak names created by the second and later installs.
+mem_restore="$(sed -n '/^PLUGIN=.*memory.js/,/restored to the V1 version/p' uninstall.sh)"
+if printf '%s' "$mem_restore" | grep -q 'ls -1t' &&
+   printf '%s' "$mem_restore" | grep -q '\.v1\.\*\.bak'; then
+  ok "uninstall restores the newest .v1* backup of memory.js"
+else
+  bad "uninstall only restores the fixed .v1.bak name (2nd install loses the V1 plugin)"
+fi
+
 printf '\n%s passed · %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

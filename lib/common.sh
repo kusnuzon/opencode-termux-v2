@@ -508,7 +508,7 @@ download_url() {
   rm -f "$part"
   if have python; then
     python - "$url" "$part" "$accept" "$tok" <<'PY' >/dev/null 2>&1 || true
-import sys, urllib.request
+import sys, shutil, urllib.request
 url, dest, accept = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "")
 token = sys.argv[4] if len(sys.argv) > 4 else ""
 req = urllib.request.Request(url, headers={"User-Agent": "opencode-v2"})
@@ -516,7 +516,10 @@ if accept:
     req.add_header("Accept", accept)
 if token:
     req.add_header("Authorization", "Bearer " + token)
-open(dest, "wb").write(urllib.request.urlopen(req, timeout=60).read())
+# stream to disk: this fallback also serves the ~115 MB payload, and a phone
+# cannot hold that in RAM
+with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as out:
+    shutil.copyfileobj(resp, out, length=1 << 20)
 PY
     [ -s "$part" ] && { mv -f "$part" "$dest"; return 0; }
   fi

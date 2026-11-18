@@ -57,8 +57,12 @@ else
 fi
 
 PLUGIN="$HOME/.config/opencode/plugins/memory.js"
-if [ -f "$PLUGIN.v1.bak" ]; then
-  mv "$PLUGIN.v1.bak" "$PLUGIN"
+# Restore the newest V1 backup. install.sh names the first backup .v1.bak but
+# later ones .v1.<timestamp>.bak, so a fixed name would silently skip the
+# restore on every machine that installed V2 more than once.
+MEM_BACKUP="$(ls -1t "$PLUGIN".v1.bak "$PLUGIN".v1.*.bak 2>/dev/null | head -n 1 || true)"
+if [ -n "$MEM_BACKUP" ]; then
+  mv "$MEM_BACKUP" "$PLUGIN"
   ok "memory_save plugin restored to the V1 version"
 fi
 

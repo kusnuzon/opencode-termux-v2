@@ -64,14 +64,16 @@ fetch_remote() {
   rm -f "$part"
   if command -v python >/dev/null 2>&1; then
     python - "$part" "https://api.github.com/repos/${REPO_SLUG}/contents/${path}?ref=${ref}" "$API_TOKEN" <<'PY' >/dev/null 2>&1
-import sys, urllib.request
+import sys, shutil, urllib.request
 dest, url = sys.argv[1], sys.argv[2]
 token = sys.argv[3] if len(sys.argv) > 3 else ""
 req = urllib.request.Request(url, headers={"User-Agent": "opencode-v2",
                                            "Accept": "application/vnd.github.raw"})
 if token:
     req.add_header("Authorization", "Bearer " + token)
-open(dest, "wb").write(urllib.request.urlopen(req, timeout=60).read())
+# stream to disk: never hold a whole download in RAM
+with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as out:
+    shutil.copyfileobj(resp, out, length=1 << 20)
 PY
     [ -s "$part" ] && { mv -f "$part" "$dest"; return 0; }
   fi
@@ -240,11 +242,9 @@ else
 
   # --- download the payload -------------------------------------------------
   progress_step_line 3 8 "Downloading the OpenCode V2 payload"
-  BACKUP=""
-  if [ -x "$REAL" ]; then
-    BACKUP="$ROOT/opencode.real.bak"
-    cp "$REAL" "$BACKUP"
-  fi
+  # No backup copy here: download_payload writes to $REAL.new and only moves it
+  # into place after success, so a failed download leaves the old payload
+  # untouched. upgrade.sh keeps its own backup for post-install rollback.
   download_payload "$TARGET" "$REAL.new" || die "Payload installation failed"
   mv "$REAL.new" "$REAL"
   printf '%s\n' "$TARGET" >"$VERSION_FILE"
@@ -255,7 +255,7 @@ fi
 progress_step_line 4 8 "Installing the launcher"
 mkdir -p "$PREFIX/bin" "$ROOT"
 LAUNCHER_SRC="$SCRIPT_DIR/opencode-v2-launcher"
-if [ ! -f "$LAUNCHER_SRC" ]; then
+if [ ! -s "$LAUNCHER_SRC" ]; then
   fetch_remote "opencode-v2-launcher" "$LAUNCHER_SRC" "$REF_PIN" \
     || die "Failed to download opencode-v2-launcher"
 fi
@@ -278,7 +278,8 @@ for aux in lib/common.sh doctor.sh upgrade.sh uninstall.sh; do
   src="$SCRIPT_DIR/$aux"
   dst="$ROOT/${aux#lib/}"
   [ "$aux" = "lib/common.sh" ] && dst="$ROOT/lib/common.sh"
-  if [ ! -f "$src" ]; then
+  # -s (not -f): a 0-byte leftover must not be installed as a support script.
+  if [ ! -s "$src" ]; then
     mkdir -p "$(dirname "$src")"
     fetch_remote "$aux" "$src" "$REF_PIN" || { warn "Failed to fetch $aux"; continue; }
   fi
@@ -305,7 +306,9 @@ install_plugin() {
   local name="$1"
   local src="$SCRIPT_DIR/plugins/$name"
   local dst="$PLUGIN_DIR/$name"
-  if [ ! -f "$src" ]; then
+  # -s (not -f): a 0-byte leftover from an interrupted older fetch must not be
+  # installed as if it were the real plugin.
+  if [ ! -s "$src" ]; then
     mkdir -p "$SCRIPT_DIR/plugins"
     fetch_remote "plugins/$name" "$src" "$REF_PIN" \
       || { warn "Failed to download plugins/$name"; return 1; }
@@ -342,7 +345,7 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
   mkdir -p "$DIGEST_DIR"
 
   DIGEST_SRC="$SCRIPT_DIR/plugins/session-digest.py"
-  if [ ! -f "$DIGEST_SRC" ]; then
+  if [ ! -s "$DIGEST_SRC" ]; then
     mkdir -p "$SCRIPT_DIR/plugins"
     fetch_remote "plugins/session-digest.py" "$DIGEST_SRC" "$REF_PIN" \
       || warn "Failed to download plugins/session-digest.py"
@@ -357,7 +360,7 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
   # quota: estimated remaining free-model quota (local databases only, no network)
   QUOTA_FILE="$DIGEST_DIR/quota"
   QUOTA_SRC="$SCRIPT_DIR/plugins/quota.py"
-  if [ ! -f "$QUOTA_SRC" ]; then
+  if [ ! -s "$QUOTA_SRC" ]; then
     mkdir -p "$SCRIPT_DIR/plugins"
     fetch_remote "plugins/quota.py" "$QUOTA_SRC" "$REF_PIN" \
       || warn "Failed to download plugins/quota.py"
@@ -381,7 +384,7 @@ if [ "$WITH_MEMORY" -eq 1 ]; then
       continue
     fi
     src="$SCRIPT_DIR/memory/$f"
-    if [ ! -f "$src" ]; then
+    if [ ! -s "$src" ]; then
       mkdir -p "$SCRIPT_DIR/memory"
       fetch_remote "memory/$f" "$src" "$REF_PIN" \
         || { warn "Failed to fetch memory/$f"; continue; }
